@@ -1,0 +1,27 @@
+# Dependências
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Ambiente / segredos
+.env
+.env.local
+*.key
+
+# Build / saída
+dist/
+build/
+saida/
+*.egg-info/
+
+# Temporários de Office
+~$*.doc
+~$*.docx
+~$*.xlsx
+
+# Sistema
+.DS_Store
+Thumbs.db
