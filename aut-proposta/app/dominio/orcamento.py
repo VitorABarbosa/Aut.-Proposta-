@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.dominio.descontos import Desconto, aplicar_desconto
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
 
@@ -125,3 +126,11 @@ def orcar_pela_planilha(
         internas=cats["internas"],
         plantas=cats["plantas"],
     )
+
+
+def fechar_orcamento(orcamento: Orcamento, desconto: "Desconto | None" = None) -> dict[str, Any]:
+    """Junta o orçamento e o cálculo financeiro (com desconto) numa estrutura."""
+    return {
+        "orcamento": orcamento.to_dict(),
+        "financeiro": aplicar_desconto(orcamento.subtotal, desconto),
+    }
