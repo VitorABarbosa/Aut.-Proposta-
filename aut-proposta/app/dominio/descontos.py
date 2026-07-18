@@ -1,7 +1,9 @@
 """Aplicação de descontos sobre o subtotal de um orçamento.
 
-Suporta desconto percentual (0-100) e valor fixo em reais. O cálculo é
-determinístico e nunca deixa o total ficar negativo.
+Suporta desconto percentual (0-100) e valor fixo em reais (>= 0). O cálculo é
+determinístico e nunca deixa o total ficar negativo. Magnitudes fora dessas
+faixas (percentual negativo ou > 100, valor fixo negativo) são inválidas e
+levantam ValueError.
 """
 from __future__ import annotations
 
@@ -30,6 +32,15 @@ def aplicar_desconto(subtotal: int, desconto: Desconto | None) -> dict[str, Any]
 
     if desconto.tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de desconto inválido: {desconto.tipo}")
+
+    # Valida a magnitude do desconto de acordo com o tipo: percentual deve
+    # estar entre 0 e 100; valor fixo não pode ser negativo.
+    if desconto.tipo == "percentual" and not (0 <= desconto.valor <= 100):
+        raise ValueError(
+            f"Desconto percentual inválido: {desconto.valor} (deve estar entre 0 e 100)"
+        )
+    if desconto.tipo == "valor" and desconto.valor < 0:
+        raise ValueError(f"Desconto de valor inválido: {desconto.valor} (deve ser >= 0)")
 
     if desconto.tipo == "percentual":
         desconto_pct = float(desconto.valor)
