@@ -15,12 +15,12 @@ def upsert_cliente(conn: psycopg.Connection, nome: str, contato: str | None = No
         row = cur.fetchone()
         if row:
             return row[0]
-        cur.execute(
-            "INSERT INTO clientes (nome, nome_norm, contato) VALUES (%s, %s, %s) RETURNING id",
-            (nome, nome_norm, contato),
-        )
-        novo_id = cur.fetchone()[0]
-    conn.commit()
+        with conn.transaction():
+            cur.execute(
+                "INSERT INTO clientes (nome, nome_norm, contato) VALUES (%s, %s, %s) RETURNING id",
+                (nome, nome_norm, contato),
+            )
+            novo_id = cur.fetchone()[0]
     return novo_id
 
 
@@ -33,7 +33,7 @@ def salvar_proposta(
 ) -> int:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
-    with conn.cursor() as cur:
+    with conn.transaction(), conn.cursor() as cur:
         cur.execute(
             "INSERT INTO propostas "
             "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url) "
@@ -49,7 +49,6 @@ def salvar_proposta(
                     "VALUES (%s, %s, %s, %s, %s)",
                     (pid, cat, item["descricao"], item["preco"], item.get("fonte", "")),
                 )
-    conn.commit()
     return pid
 
 
@@ -66,7 +65,7 @@ def ultima_proposta_estruturada(conn: psycopg.Connection, cliente_id: int) -> di
 
         out: dict = {cat: {"qtd": 0, "total": 0, "itens": []} for cat in CATEGORIAS}
         cur.execute(
-            "SELECT categoria, descricao, preco FROM proposta_itens WHERE proposta_id = %s",
+            "SELECT categoria, descricao, preco FROM proposta_itens WHERE proposta_id = %s ORDER BY id",
             (pid,),
         )
         for categoria, descricao, preco in cur.fetchall():

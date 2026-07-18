@@ -66,3 +66,21 @@ def test_ultima_proposta_none_sem_proposta(db):
     aplicar_schema(db)
     cid = upsert_cliente(db, "NOVO CLIENTE")
     assert ultima_proposta_estruturada(db, cid) is None
+
+
+def test_ultima_proposta_desempata_por_id_quando_mesma_data(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "GALLI")
+    salvar_proposta(db, cid, _fechado_exemplo())
+
+    segunda = _fechado_exemplo()
+    segunda["orcamento"]["externas"]["itens"][0]["preco"] = 4000
+    segunda["orcamento"]["externas"]["total"] = 4000
+    segunda["orcamento"]["subtotal"] = 6650
+    segunda["financeiro"]["subtotal"] = 6650
+    segunda["financeiro"]["total"] = 5985.0
+    salvar_proposta(db, cid, segunda)
+
+    ult = ultima_proposta_estruturada(db, cid)
+    assert ult["externas"]["itens"][0] == {"desc": "Perspectiva Fachada", "preco": 4000}
+    assert ult["externas"]["total"] == 4000

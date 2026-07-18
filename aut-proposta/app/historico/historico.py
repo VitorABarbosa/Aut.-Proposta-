@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import psycopg
 
-from app.db.repo_propostas import ultima_proposta_estruturada, upsert_cliente
+from app.db.repo_propostas import ultima_proposta_estruturada
 from app.dominio.texto import normalizar
 
 CATEGORIAS = ("externas", "internas", "plantas")

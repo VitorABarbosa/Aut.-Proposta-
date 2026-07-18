@@ -22,7 +22,7 @@ def semear_precos(conn: psycopg.Connection) -> dict[str, int]:
 
     n_cat = 0
     n_item = 0
-    with conn.cursor() as cur:
+    with conn.transaction(), conn.cursor() as cur:
         cur.execute("TRUNCATE preco_item, preco_categoria RESTART IDENTITY CASCADE")
         for cat in CATEGORIAS:
             bloco = dados[cat]
@@ -40,7 +40,6 @@ def semear_precos(conn: psycopg.Connection) -> dict[str, int]:
                      linha["padroes"], ordem),
                 )
                 n_item += 1
-    conn.commit()
     return {"categorias": n_cat, "itens": n_item}
 
 
