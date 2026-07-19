@@ -51,3 +51,19 @@ def enviar_docx(caminho: Path, chave: str) -> str | None:
     conta = os.environ["R2_ACCOUNT_ID"]
     bucket = os.environ["R2_BUCKET"]
     return f"https://{conta}.r2.cloudflarestorage.com/{bucket}/{chave}"
+
+
+def excluir_objetos(chaves: list[str]) -> int:
+    """Apaga objetos do bucket. Nunca levanta; sem credenciais devolve 0."""
+    if not r2_configurado() or not chaves:
+        return 0
+    try:
+        s3 = _cliente_s3()
+        bucket = os.environ["R2_BUCKET"]
+        n = 0
+        for chave in chaves:
+            s3.delete_object(Bucket=bucket, Key=chave)
+            n += 1
+        return n
+    except Exception:  # noqa: BLE001 — falha de exclusão nunca levanta
+        return 0

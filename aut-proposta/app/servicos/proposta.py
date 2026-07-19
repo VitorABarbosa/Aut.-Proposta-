@@ -15,9 +15,15 @@ from app.db.repo_propostas import atualizar_docx_url, salvar_proposta, upsert_cl
 from app.docx.gerador import gerar_docx
 from app.dominio.descontos import Desconto
 from app.dominio.orcamento import fechar_orcamento, orcar_pela_planilha
+from app.dominio.texto import normalizar
 from app.historico.historico import Historico
 from app.historico.orcamento_historico import orcar_pelo_historico
 from app.storage.r2 import enviar_docx
+
+
+def _slug(texto: str) -> str:
+    """Normaliza e converte espaços em hífens para slug de chave R2."""
+    return normalizar(texto).replace(" ", "-")
 
 
 def _descricoes(estrutura: dict[str, Any]) -> dict[str, list[str]]:
@@ -74,7 +80,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
         mostra_precos_individuais=bool(estrutura.get("mostrar_precos_individuais")),
     )
 
-    chave = f"propostas/proposta_{proposta_id}.docx"
+    chave = f"Propostas/{_slug(cliente['empresa'])}/{_slug(cliente.get('ref') or 'geral')}/proposta_{proposta_id}.docx"
     docx_url = enviar_docx(docx_path, chave)
     if docx_url:
         atualizar_docx_url(conn, proposta_id, docx_url)
@@ -90,6 +96,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
         "proposta_id": proposta_id,
         "docx_path": str(docx_path),
         "docx_url": docx_url,
+        "chave_r2": chave,
         "fechado": fechado,
         "avisos": lev["avisos"],
     }

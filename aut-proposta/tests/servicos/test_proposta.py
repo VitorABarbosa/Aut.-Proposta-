@@ -107,7 +107,7 @@ def test_gerar_com_r2_grava_url(db, tmp_path, monkeypatch):
     monkeypatch.setattr(svc, "enviar_docx",
                         lambda caminho, chave: f"https://r2.exemplo/{chave}")
     out = svc.gerar(db, _estrutura(), tmp_path)
-    assert out["docx_url"] == f"https://r2.exemplo/propostas/proposta_{out['proposta_id']}.docx"
+    assert out["docx_url"] == f"https://r2.exemplo/{out['chave_r2']}"
     with db.cursor() as cur:
         cur.execute("SELECT docx_url FROM propostas WHERE id = %s", (out["proposta_id"],))
         assert cur.fetchone()[0] == out["docx_url"]
@@ -132,3 +132,15 @@ def test_gerar_persiste_apos_fechar_conexao(db, tmp_path, monkeypatch):
             assert cur.fetchone()[0] == 1
     finally:
         outra.close()
+
+
+def test_gerar_usa_chave_organizada_por_cliente_projeto(db, tmp_path, monkeypatch):
+    _prep(db)
+    chaves = []
+    monkeypatch.setattr(svc, "enviar_docx",
+                        lambda caminho, chave: (chaves.append(chave),
+                                                f"https://r2/{chave}")[1])
+    out = svc.gerar(db, _estrutura(), tmp_path)
+    esperado = f"Propostas/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
+    assert chaves == [esperado]
+    assert out["chave_r2"] == esperado
