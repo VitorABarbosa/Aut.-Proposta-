@@ -3,10 +3,17 @@ name = "aut-proposta"
 version = "0.1.0"
 description = "Automação de Proposta Flying Studio — serviço de precificação e geração de propostas"
 requires-python = ">=3.12"
-dependencies = ["psycopg[binary]>=3.2"]
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-docx>=1.1",
+    "openai>=1.40",
+    "boto3>=1.34",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
