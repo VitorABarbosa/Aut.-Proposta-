@@ -66,11 +66,12 @@ def _extrai_lista(bloco: str) -> list[str]:
     linhas = [l for l in bloco.splitlines() if l.strip()]
     if len(linhas) >= 2:
         items = [_limpa_item(l) for l in linhas if _limpa_item(l)]
-        # Filtra itens que parecem ser metadata (desconto, estratégia, etc) ao invés de lista
-        items = [i for i in items if not re.search(r"(?:desconto|planilha|histórico|histórico|preço)", i, re.I)]
-        return items
-    partes = re.split(r"[;,]| e ", bloco)
-    return [_limpa_item(p) for p in partes if _limpa_item(p)]
+    else:
+        partes = re.split(r"[;,]| e ", bloco)
+        items = [_limpa_item(p) for p in partes if _limpa_item(p)]
+    # Filtra itens que parecem ser metadata (desconto, estratégia, etc) ao invés de lista
+    items = [i for i in items if not re.search(r"(?:desconto|planilha|hist[oó]rico|pre[cç]o)", i, re.I)]
+    return items
 
 
 def parse_local(texto: str) -> dict[str, Any]:

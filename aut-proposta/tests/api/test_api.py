@@ -52,6 +52,15 @@ def test_token_errado_da_401(cliente_api):
     assert r.status_code == 401
 
 
+def test_token_errado_nao_ascii_da_401(cliente_api):
+    # hmac.compare_digest em str crua explode com TypeError se o header tiver
+    # caracteres não-ASCII; precisa comparar bytes. Header vai como bytes UTF-8
+    # (httpx não aceita str não-ASCII direto em headers).
+    r = cliente_api.post("/levantamento", json={"texto": "x"},
+                         headers={"Authorization": "Bearer sënha-errada".encode("utf-8")})
+    assert r.status_code == 401
+
+
 def test_levantamento_precifica(cliente_api):
     r = cliente_api.post("/levantamento", json={"texto": TEXTO}, headers=HEAD)
     assert r.status_code == 200

@@ -40,7 +40,7 @@ def verificar_token(request: Request) -> None:
     if not esperado:
         raise HTTPException(503, "API_TOKEN não configurado")
     recebido = request.headers.get("Authorization", "")
-    if not hmac.compare_digest(recebido, f"Bearer {esperado}"):
+    if not hmac.compare_digest(recebido.encode(), f"Bearer {esperado}".encode()):
         raise HTTPException(401, "Token inválido")
 
 

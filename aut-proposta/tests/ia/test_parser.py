@@ -81,3 +81,27 @@ def test_parse_sem_chave_usa_local(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     out = parser.parse(TEXTO_EXEMPLO)
     assert out["_origem"] == "local"
+
+
+def test_parse_local_filtra_metadata_em_linha_unica():
+    # Seção de uma linha só (branch de split por vírgula) também deve filtrar
+    # metadata de desconto/estratégia, não só o branch multilinha.
+    texto = "Cliente: GALLI\nPlantas: Apartamento Tipo, 10% de desconto, preço de planilha"
+    out = parser.parse_local(texto)
+    assert out["plantas"] == ["Apartamento Tipo"]
+    assert out["desconto_pct"] == 10.0
+    assert out["estrategia"] == "planilha"
+
+
+def test_parse_local_filtra_metadata_historico_sem_acento_multilinha():
+    # Regex de filtro tinha "histórico" duplicado e sem a forma sem acento.
+    texto = (
+        "Cliente: GALLI\n"
+        "Plantas:\n"
+        "- Implantação Térreo\n"
+        "- Apartamento Tipo\n"
+        "usar historico do cliente"
+    )
+    out = parser.parse_local(texto)
+    assert out["plantas"] == ["Implantação Térreo", "Apartamento Tipo"]
+    assert out["estrategia"] == "historico"
