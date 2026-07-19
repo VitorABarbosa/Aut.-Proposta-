@@ -111,3 +111,24 @@ def test_gerar_com_r2_grava_url(db, tmp_path, monkeypatch):
     with db.cursor() as cur:
         cur.execute("SELECT docx_url FROM propostas WHERE id = %s", (out["proposta_id"],))
         assert cur.fetchone()[0] == out["docx_url"]
+
+
+def test_gerar_persiste_apos_fechar_conexao(db, tmp_path, monkeypatch):
+    """Regressão: os SELECTs de levantar abrem transação implícita e os
+    conn.transaction() dos repos viram SAVEPOINTs — sem commit final, o
+    close() da conexão descartava a proposta (visto na verificação real)."""
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    out = svc.gerar(db, _estrutura(), tmp_path)
+
+    # Verifica numa SEGUNDA conexão: só enxerga o que foi de fato commitado.
+    from tests.conftest import DSN_TESTE
+    from app.db.conexao import get_conn
+
+    outra = get_conn(DSN_TESTE)
+    try:
+        with outra.cursor() as cur:
+            cur.execute("SELECT count(*) FROM propostas WHERE id = %s", (out["proposta_id"],))
+            assert cur.fetchone()[0] == 1
+    finally:
+        outra.close()

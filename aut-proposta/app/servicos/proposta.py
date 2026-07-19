@@ -81,6 +81,11 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     else:
         lev["avisos"].append("Upload no R2 indisponível — use o download direto da API.")
 
+    # Os SELECTs de levantar abrem transação implícita na conexão, o que rebaixa
+    # os conn.transaction() dos repositórios a SAVEPOINTs — sem este commit, o
+    # close() da conexão descartaria a proposta inteira.
+    conn.commit()
+
     return {
         "proposta_id": proposta_id,
         "docx_path": str(docx_path),
