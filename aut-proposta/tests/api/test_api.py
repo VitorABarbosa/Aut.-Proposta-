@@ -184,3 +184,78 @@ def test_desconto_fora_de_faixa_da_422(cliente_api):
 
     r2 = cliente_api.post("/propostas", json={"estrutura": estrutura}, headers=HEAD)
     assert r2.status_code == 422
+
+
+def test_listar_propostas_por_cliente(cliente_api):
+    # Cria duas propostas para GALLI
+    estrutura_galli = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r1 = cliente_api.post("/propostas", json={"estrutura": estrutura_galli}, headers=HEAD)
+    assert r1.status_code == 200
+    pid1 = r1.json()["proposta_id"]
+
+    r2 = cliente_api.post("/propostas", json={"estrutura": estrutura_galli}, headers=HEAD)
+    assert r2.status_code == 200
+    pid2 = r2.json()["proposta_id"]
+
+    # Lista propostas de GALLI
+    r = cliente_api.get("/propostas?cliente=GALLI", headers=HEAD)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert "propostas" in corpo
+    propostas = corpo["propostas"]
+    assert len(propostas) >= 2
+    pids = [p["proposta_id"] for p in propostas]
+    assert pid1 in pids and pid2 in pids
+    # Verifica que cada proposta tem campos esperados
+    for p in propostas:
+        assert "proposta_id" in p
+        assert "cliente" in p
+        assert "referencia" in p
+        assert "subtotal" in p
+        assert "total" in p
+        assert "download" in p
+
+
+def test_listar_propostas_sem_auth_401(cliente_api):
+    r = cliente_api.get("/propostas?cliente=GALLI")
+    assert r.status_code == 401
+
+
+def test_deletar_proposta(cliente_api):
+    # Cria uma proposta
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r_criar = cliente_api.post("/propostas", json={"estrutura": estrutura}, headers=HEAD)
+    assert r_criar.status_code == 200
+    pid = r_criar.json()["proposta_id"]
+
+    # Deleta a proposta
+    r = cliente_api.delete(f"/propostas/{pid}", headers=HEAD)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["excluida"] == pid
+
+    # Verifica que a proposta foi deletada (não é mais listada)
+    r_lista = cliente_api.get("/propostas?cliente=GALLI", headers=HEAD)
+    assert r_lista.status_code == 200
+    pids = [p["proposta_id"] for p in r_lista.json()["propostas"]]
+    assert pid not in pids
+
+
+def test_deletar_proposta_inexistente_404(cliente_api):
+    r = cliente_api.delete("/propostas/99999", headers=HEAD)
+    assert r.status_code == 404
+
+
+def test_deletar_proposta_sem_auth_401(cliente_api):
+    r = cliente_api.delete("/propostas/1")
+    assert r.status_code == 401

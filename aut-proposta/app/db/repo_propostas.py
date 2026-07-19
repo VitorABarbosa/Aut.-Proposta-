@@ -126,3 +126,26 @@ def excluir_proposta(conn: psycopg.Connection, proposta_id: int) -> bool:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM propostas WHERE id = %s", (proposta_id,))
             return cur.rowcount > 0
+
+
+def listar_propostas(conn: psycopg.Connection, cliente_nome: str) -> list[dict]:
+    """Lista todas as propostas de um cliente (por nome normalizado)."""
+    cliente_norm = normalizar(cliente_nome)
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT p.id, c.nome, p.referencia, p.subtotal, p.total "
+            "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
+            "WHERE c.nome_norm = %s ORDER BY p.data DESC, p.id DESC",
+            (cliente_norm,),
+        )
+        propostas = []
+        for pid, cnome, ref, subtotal, total in cur.fetchall():
+            propostas.append({
+                "proposta_id": pid,
+                "cliente": cnome,
+                "referencia": ref or "",
+                "subtotal": float(subtotal),
+                "total": float(total),
+                "download": f"/propostas/{pid}/docx",
+            })
+    return propostas

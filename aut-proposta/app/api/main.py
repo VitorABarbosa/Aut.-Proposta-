@@ -15,9 +15,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from app.db.conexao import get_conn
+from app.db.repo_propostas import excluir_proposta, listar_propostas
 from app.docx.pdf import converter_para_pdf
 from app.ia.parser import parse
 from app.servicos.proposta import gerar, levantar
+from app.storage.r2 import excluir_objetos
 
 app = FastAPI(title="Automação de Proposta — Flying Studio")
 
@@ -159,3 +161,56 @@ def rota_download_pdf(proposta_id: int):
         pdf = pdf_gerado
     return FileResponse(pdf, media_type="application/pdf",
                         filename=f"proposta_{proposta_id}.pdf")
+
+
+@app.get("/propostas", dependencies=[Depends(verificar_token)])
+def rota_listar_propostas(cliente: str):
+    conn = _abrir_conn()
+    try:
+        propostas = listar_propostas(conn, cliente)
+    finally:
+        _fechar_conn(conn)
+    return {"propostas": propostas}
+
+
+@app.delete("/propostas/{proposta_id}", dependencies=[Depends(verificar_token)])
+def rota_deletar_proposta(proposta_id: int):
+    conn = _abrir_conn()
+    try:
+        # Primeiro obtém a proposta para recuperar a chave R2
+        from app.db.repo_propostas import obter_estrutura_de_proposta
+        estrutura = obter_estrutura_de_proposta(conn, proposta_id)
+        if not estrutura:
+            raise HTTPException(404, "Proposta não encontrada")
+
+        # Tenta recuperar a chave R2 para exclusão (se disponível em docx_url)
+        with conn.cursor() as cur:
+            cur.execute("SELECT docx_url FROM propostas WHERE id = %s", (proposta_id,))
+            row = cur.fetchone()
+            docx_url = row[0] if row else None
+
+        # Apaga a proposta do banco
+        resultado = excluir_proposta(conn, proposta_id)
+        if not resultado:
+            raise HTTPException(404, "Proposta não encontrada")
+
+        # Tenta apagar do R2 (será None se não estava subida)
+        if docx_url:
+            # Extrai a chave da URL (está no final após o último /)
+            chave = docx_url.split("/")[-3:] if "/" in docx_url else []
+            if chave and len(chave) >= 3:
+                # Reconstrói a chave completa
+                chave_r2 = f"Propostas/{chave[-3]}/{chave[-2]}/{chave[-1]}"
+                excluir_objetos([chave_r2])
+
+        # Apaga o arquivo local se existir
+        docx_path = _dir_saida() / f"proposta_{proposta_id}.docx"
+        if docx_path.exists():
+            docx_path.unlink()
+        pdf_path = docx_path.with_suffix(".pdf")
+        if pdf_path.exists():
+            pdf_path.unlink()
+
+    finally:
+        _fechar_conn(conn)
+    return {"excluida": proposta_id}

@@ -2,6 +2,7 @@ import pytest
 
 from app.db.repo_propostas import (
     excluir_proposta,
+    listar_propostas,
     obter_estrutura_de_proposta,
     salvar_proposta,
     ultima_proposta_estruturada,
@@ -136,3 +137,29 @@ def test_excluir_proposta_nao_existe(db):
     aplicar_schema(db)
     resultado = excluir_proposta(db, 999)
     assert resultado is False
+
+
+def test_listar_propostas(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "GALLI")
+    pid1 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="Aurora")
+    pid2 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="Aurora 2")
+
+    propostas = listar_propostas(db, "GALLI")
+    assert len(propostas) >= 2
+    pids = [p["proposta_id"] for p in propostas]
+    assert pid1 in pids and pid2 in pids
+    # Verifica campos esperados
+    for p in propostas:
+        assert "proposta_id" in p
+        assert "cliente" in p
+        assert "referencia" in p
+        assert "subtotal" in p
+        assert "total" in p
+        assert "download" in p
+
+
+def test_listar_propostas_cliente_inexistente(db):
+    aplicar_schema(db)
+    propostas = listar_propostas(db, "CLIENTE NOVO")
+    assert propostas == []
