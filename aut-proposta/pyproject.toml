@@ -3,7 +3,7 @@ name = "aut-proposta"
 version = "0.1.0"
 description = "Automação de Proposta Flying Studio — serviço de precificação e geração de propostas"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["psycopg[binary]>=3.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
@@ -11,6 +11,9 @@ dev = ["pytest>=8.0"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "db: teste que requer Postgres (usa o fixture db; pula se indisponível)",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
