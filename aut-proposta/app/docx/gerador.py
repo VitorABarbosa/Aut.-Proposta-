@@ -348,13 +348,10 @@ def gerar_docx(
     _run(p, f"São Paulo, {data_extenso(data)}.")
     p = _par(doc, depois=24)
     _run(p, "De acordo,")
-    # Linha de assinatura com o nome do cliente centralizado abaixo dela.
-    p = _par(doc, depois=2)
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, "_" * 60)
+    # Linha de assinatura VAZIA — o cliente assina sobre ela no PDF enviado.
     p = _par(doc, depois=0)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, cliente["empresa"].upper(), estilo="bh")
+    _run(p, "_" * 60)
 
     saida.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(saida))
