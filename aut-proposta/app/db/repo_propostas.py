@@ -74,3 +74,13 @@ def ultima_proposta_estruturada(conn: psycopg.Connection, cliente_id: int) -> di
                 out[categoria]["qtd"] += 1
                 out[categoria]["total"] += preco
     return out
+
+
+def atualizar_docx_url(conn: psycopg.Connection, proposta_id: int, docx_url: str) -> None:
+    """Grava a URL do .docx (R2) numa proposta já salva."""
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE propostas SET docx_url = %s WHERE id = %s",
+                (docx_url, proposta_id),
+            )
