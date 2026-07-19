@@ -134,6 +134,11 @@ def test_pendencias_vazia_quando_completo(cliente_api):
     assert r.json()["pendencias"] == []
 
 
+def test_pdf_de_proposta_inexistente_404(cliente_api):
+    r = cliente_api.get("/propostas/99999/pdf", headers=HEAD)
+    assert r.status_code == 404
+
+
 def test_download_inexistente_404(cliente_api):
     r = cliente_api.get("/propostas/99999/docx", headers=HEAD)
     assert r.status_code == 404

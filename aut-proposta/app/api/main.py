@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from app.db.conexao import get_conn
+from app.docx.pdf import converter_para_pdf
 from app.ia.parser import parse
 from app.servicos.proposta import gerar, levantar
 
@@ -132,3 +133,18 @@ def rota_download(proposta_id: int):
         raise HTTPException(404, "Proposta não encontrada")
     return FileResponse(caminho, media_type=MIME_DOCX,
                         filename=f"proposta_{proposta_id}.docx")
+
+
+@app.get("/propostas/{proposta_id}/pdf", dependencies=[Depends(verificar_token)])
+def rota_download_pdf(proposta_id: int):
+    docx = _dir_saida() / f"proposta_{proposta_id}.docx"
+    pdf = docx.with_suffix(".pdf")
+    if not pdf.exists():
+        if not docx.exists():
+            raise HTTPException(404, "Proposta não encontrada")
+        pdf_gerado = converter_para_pdf(docx)
+        if pdf_gerado is None:
+            raise HTTPException(501, "Conversor PDF (LibreOffice) indisponível neste servidor")
+        pdf = pdf_gerado
+    return FileResponse(pdf, media_type="application/pdf",
+                        filename=f"proposta_{proposta_id}.pdf")
