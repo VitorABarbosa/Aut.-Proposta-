@@ -98,6 +98,42 @@ def test_gerar_por_estrutura_revisada(cliente_api):
     assert r.json()["fechado"]["orcamento"]["subtotal"] == 3000
 
 
+def test_levantamento_por_estrutura_reprecifica(cliente_api):
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada vista da calçada"], "internas": [], "plantas": [],
+        "desconto_pct": 5.0, "desconto_label": "ajuste", "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["estrutura"]["cliente"]["empresa"] == "GALLI"
+    assert corpo["fechado"]["orcamento"]["subtotal"] == 3000
+    assert corpo["fechado"]["financeiro"]["desconto_pct"] == 5.0
+
+
+def test_levantamento_sem_texto_nem_estrutura_422(cliente_api):
+    r = cliente_api.post("/levantamento", json={}, headers=HEAD)
+    assert r.status_code == 422
+
+
+def test_pendencias_apontam_requisitos_faltantes(cliente_api):
+    # Texto sem A/C e sem ref: parser preenche defaults, que contam como faltando.
+    r = cliente_api.post("/levantamento", json={"texto": "Externas: Fachada"}, headers=HEAD)
+    assert r.status_code == 200
+    pend = r.json()["pendencias"]
+    assert any("construtora" in p.lower() or "cliente" in p.lower() for p in pend)
+    assert any("a/c" in p.lower() or "respons" in p.lower() for p in pend)
+    assert any("empreendimento" in p.lower() or "projeto" in p.lower() for p in pend)
+
+
+def test_pendencias_vazia_quando_completo(cliente_api):
+    r = cliente_api.post("/levantamento", json={"texto": TEXTO}, headers=HEAD)
+    assert r.status_code == 200
+    assert r.json()["pendencias"] == []
+
+
 def test_download_inexistente_404(cliente_api):
     r = cliente_api.get("/propostas/99999/docx", headers=HEAD)
     assert r.status_code == 404

@@ -45,7 +45,14 @@ def verificar_token(request: Request) -> None:
 
 
 class CorpoLevantamento(BaseModel):
-    texto: str
+    texto: str | None = None
+    estrutura: dict | None = None
+
+    @model_validator(mode="after")
+    def _um_dos_dois(self):
+        if self.texto is None and self.estrutura is None:
+            raise ValueError("Envie 'texto' ou 'estrutura'.")
+        return self
 
 
 class CorpoProposta(BaseModel):
@@ -59,6 +66,26 @@ class CorpoProposta(BaseModel):
         return self
 
 
+def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
+    """Requisitos obrigatórios de toda proposta; defaults do parser contam como faltando."""
+    pend: list[str] = []
+    cli = estrutura.get("cliente", {})
+
+    # Check se cliente foi marcado explicitamente ou é um fallback do parser
+    avisos = estrutura.get("_avisos", [])
+    cliente_foi_assumido = any("Cliente não foi marcado explicitamente" in a for a in avisos)
+
+    if not cli.get("empresa") or cli["empresa"] == "CLIENTE" or cliente_foi_assumido:
+        pend.append("Informe a construtora/incorporadora (cliente).")
+    if not cli.get("ref") or cli["ref"] == "PROJETO":
+        pend.append("Informe o empreendimento/projeto (ref).")
+    if not cli.get("contato") or cli["contato"] == "—":
+        pend.append("Informe o A/C — responsável que recebe a proposta.")
+    if fechado["orcamento"]["total_imagens"] == 0:
+        pend.append("Nenhum item identificado — liste as imagens/serviços contratados.")
+    return pend
+
+
 @app.get("/saude")
 def saude():
     return {"ok": True}
@@ -66,7 +93,7 @@ def saude():
 
 @app.post("/levantamento", dependencies=[Depends(verificar_token)])
 def rota_levantamento(corpo: CorpoLevantamento):
-    estrutura = parse(corpo.texto)
+    estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
     conn = _abrir_conn()
     try:
         lev = levantar(conn, estrutura)
@@ -77,6 +104,7 @@ def rota_levantamento(corpo: CorpoLevantamento):
         "fechado": lev["fechado"],
         "estrategia_usada": lev["estrategia_usada"],
         "avisos": lev["avisos"],
+        "pendencias": _pendencias(estrutura, lev["fechado"]),
     }
 
 
