@@ -169,3 +169,18 @@ def test_pendencia_de_cliente_assumido_some_apos_edicao(cliente_api):
     estrutura["cliente"]["empresa"] = "Externas: Fachada"
     r2 = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
     assert any("construtora" in p.lower() for p in r2.json()["pendencias"])
+
+
+def test_desconto_fora_de_faixa_da_422(cliente_api):
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 150.0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 422
+    assert "150" in r.json()["detail"] or "percentual" in r.json()["detail"].lower()
+
+    r2 = cliente_api.post("/propostas", json={"estrutura": estrutura}, headers=HEAD)
+    assert r2.status_code == 422

@@ -34,3 +34,17 @@ def test_sem_soffice_devolve_none(tmp_path, monkeypatch):
     arq = tmp_path / "p.docx"
     arq.write_bytes(b"x")
     assert converter_para_pdf(arq) is None
+
+
+def test_falha_do_soffice_devolve_none(tmp_path, monkeypatch):
+    import subprocess as sp
+
+    monkeypatch.setattr("shutil.which", lambda nome: "C:/fake/soffice")
+
+    def _explode(*a, **kw):
+        raise sp.CalledProcessError(1, "soffice")
+
+    monkeypatch.setattr("subprocess.run", _explode)
+    arq = tmp_path / "p.docx"
+    arq.write_bytes(b"x")
+    assert converter_para_pdf(arq) is None

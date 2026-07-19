@@ -105,6 +105,8 @@ def rota_levantamento(corpo: CorpoLevantamento):
     conn = _abrir_conn()
     try:
         lev = levantar(conn, estrutura)
+    except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
+        raise HTTPException(422, str(e))
     finally:
         _fechar_conn(conn)
     return {
@@ -122,6 +124,8 @@ def rota_gerar(corpo: CorpoProposta):
     conn = _abrir_conn()
     try:
         out = gerar(conn, estrutura, _dir_saida())
+    except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
+        raise HTTPException(422, str(e))
     finally:
         _fechar_conn(conn)
     return {
