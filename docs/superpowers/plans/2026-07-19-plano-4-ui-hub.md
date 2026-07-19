@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ferramenta "Proposta" utilizável de ponta a ponta: UI no hub `flyingstudio-tools` (texto livre → preview precificado ao vivo → ajustes → .docx) e o serviço `aut-proposta` no ar no Railway.
+**Goal:** Ferramenta "Proposta" utilizável de ponta a ponta: UI no hub `flyingstudio-tools` (texto livre → preview precificado ao vivo → pendências obrigatórias preenchidas → ajustes → .docx e .pdf) e o serviço `aut-proposta` no ar no Railway.
 
 **Architecture:** No hub (Next.js 14 App Router), um novo agente em `src/components/agents/proposta/` no padrão dos existentes (AgentShell + fluxo de painéis), falando com o backend SEMPRE via proxy `src/app/api/tools/proposta/[...route]/route.ts` (sessão Better Auth + `tool_permissions` + header `Authorization: Bearer` injetado server-side — o token nunca chega ao browser). No backend, uma única mudança: `/levantamento` passa a aceitar `estrutura` (para reprecificar edições do preview). Fecha com deploy Railway + smoke test de produção.
 
@@ -24,21 +24,25 @@ Plano 4 de 4 — final. (1) núcleo ✅ (2) NEON+histórico ✅ (3) docx+IA+API 
 - **Backend:** `app/dominio/` intocado; a IA nunca vê/produz preço; NEON única fonte de preços; código do aut-proposta em português.
 - Slug da ferramenta: **`proposta`** — idêntico em `src/config/tools.ts` (`id`), `AGENT_COMPONENTS`, rota do proxy e linhas da tabela `tool_permissions`.
 - `AreaSlug` é união fechada — usar `areas: ['comercial']`.
-- Contratos da API (Plano 3): `POST /levantamento` → `{estrutura, fechado, estrategia_usada, avisos}`; `POST /propostas` → `{proposta_id, docx_url, download, fechado, avisos}`; `GET /propostas/{id}/docx` → FileResponse. `estrutura` = `{cliente:{empresa,ref,contato}, externas[], internas[], plantas[], desconto_pct, desconto_label, estrategia, mostrar_precos_individuais, _avisos[]}`.
+- Contratos da API (Plano 3 + este plano): `POST /levantamento` → `{estrutura, fechado, estrategia_usada, avisos, pendencias}`; `POST /propostas` → `{proposta_id, docx_url, download, fechado, avisos}`; `GET /propostas/{id}/docx` → FileResponse; `GET /propostas/{id}/pdf` → FileResponse (novo). `estrutura` = `{cliente:{empresa,ref,contato}, externas[], internas[], plantas[], desconto_pct, desconto_label, estrategia, mostrar_precos_individuais, _avisos[]}`.
+- **Requisitos obrigatórios de uma proposta** (decisão do usuário 2026-07-19): construtora/incorporadora (`cliente.empresa`), empreendimento (`cliente.ref`), A/C — responsável que recebe (`cliente.contato`) e ≥1 item/serviço. O backend devolve `pendencias: string[]` no levantamento (vazia quando tudo preenchido — os defaults do parser `"CLIENTE"`, `"PROJETO"` e `"—"` contam como FALTANDO); a UI bloqueia "Gerar" enquanto houver pendência e oferece campos para completar. O `POST /propostas` continua permissivo (a trava é da UI).
+- **PDF** (decisão do usuário): propostas são enviadas em PDF. Conversão docx→pdf server-side via LibreOffice headless (`soffice`); no ambiente sem `soffice` o endpoint devolve **501** com mensagem clara (o teste local pula). O Dockerfile instala `libreoffice-writer` + `fonts-crosextra-carlito` (métrica compatível com Calibri).
 
 ---
 
-### Task 1: Backend — `/levantamento` aceita `estrutura` (reprecificação)
+### Task 1: Backend — `/levantamento` aceita `estrutura` + pendências obrigatórias
 
 **Repo:** aut-proposta (branch `feat/plano-4-levantamento-estrutura`).
 
 **Files:**
-- Modify: `aut-proposta/app/api/main.py` (CorpoLevantamento + rota)
-- Test: `aut-proposta/tests/api/test_api.py` (2 testes novos)
+- Modify: `aut-proposta/app/api/main.py` (CorpoLevantamento + rota + `_pendencias`)
+- Test: `aut-proposta/tests/api/test_api.py` (4 testes novos)
 
 **Interfaces:**
 - Consumes: `levantar(conn, estrutura)` (já existe).
-- Produces: `POST /levantamento` aceita `{"texto": str}` OU `{"estrutura": dict}` (exatamente como `POST /propostas` já faz); com `estrutura`, pula o parser e reprecifica direto; resposta inclui a `estrutura` usada. Nenhum dos dois → 422.
+- Produces:
+  - `POST /levantamento` aceita `{"texto": str}` OU `{"estrutura": dict}` (como `POST /propostas` já faz); com `estrutura`, pula o parser e reprecifica direto; resposta inclui a `estrutura` usada. Nenhum dos dois → 422.
+  - Resposta ganha `pendencias: string[]` — mensagens dos requisitos faltantes: `cliente.empresa` vazio ou `"CLIENTE"`; `cliente.ref` vazio ou `"PROJETO"`; `cliente.contato` vazio ou `"—"`; `total_imagens == 0`. Vazia quando tudo preenchido.
 
 - [ ] **Step 1: Escrever os testes (falha primeiro)**
 
@@ -63,6 +67,22 @@ def test_levantamento_por_estrutura_reprecifica(cliente_api):
 def test_levantamento_sem_texto_nem_estrutura_422(cliente_api):
     r = cliente_api.post("/levantamento", json={}, headers=HEAD)
     assert r.status_code == 422
+
+
+def test_pendencias_apontam_requisitos_faltantes(cliente_api):
+    # Texto sem A/C e sem ref: parser preenche defaults, que contam como faltando.
+    r = cliente_api.post("/levantamento", json={"texto": "Externas: Fachada"}, headers=HEAD)
+    assert r.status_code == 200
+    pend = r.json()["pendencias"]
+    assert any("construtora" in p.lower() or "cliente" in p.lower() for p in pend)
+    assert any("a/c" in p.lower() or "respons" in p.lower() for p in pend)
+    assert any("empreendimento" in p.lower() or "projeto" in p.lower() for p in pend)
+
+
+def test_pendencias_vazia_quando_completo(cliente_api):
+    r = cliente_api.post("/levantamento", json={"texto": TEXTO}, headers=HEAD)
+    assert r.status_code == 200
+    assert r.json()["pendencias"] == []
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
@@ -87,6 +107,21 @@ class CorpoLevantamento(BaseModel):
 ```
 
 ```python
+def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
+    """Requisitos obrigatórios de toda proposta; defaults do parser contam como faltando."""
+    pend: list[str] = []
+    cli = estrutura.get("cliente", {})
+    if not cli.get("empresa") or cli["empresa"] == "CLIENTE":
+        pend.append("Informe a construtora/incorporadora (cliente).")
+    if not cli.get("ref") or cli["ref"] == "PROJETO":
+        pend.append("Informe o empreendimento/projeto (ref).")
+    if not cli.get("contato") or cli["contato"] == "—":
+        pend.append("Informe o A/C — responsável que recebe a proposta.")
+    if fechado["orcamento"]["total_imagens"] == 0:
+        pend.append("Nenhum item identificado — liste as imagens/serviços contratados.")
+    return pend
+
+
 @app.post("/levantamento", dependencies=[Depends(verificar_token)])
 def rota_levantamento(corpo: CorpoLevantamento):
     estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
@@ -100,19 +135,156 @@ def rota_levantamento(corpo: CorpoLevantamento):
         "fechado": lev["fechado"],
         "estrategia_usada": lev["estrategia_usada"],
         "avisos": lev["avisos"],
+        "pendencias": _pendencias(estrutura, lev["fechado"]),
     }
 ```
 
 - [ ] **Step 4: Rodar e ver passar (suíte inteira)**
 
 Run: `pytest -q`
-Expected: 83 passed (81 + 2).
+Expected: 85 passed (81 + 4).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add aut-proposta/app/api/main.py aut-proposta/tests/api/test_api.py
-git commit -m "feat(proposta): /levantamento aceita estrutura (reprecificação do preview)"
+git commit -m "feat(proposta): /levantamento aceita estrutura + pendências obrigatórias"
+```
+
+---
+
+### Task 1B: Backend — download em PDF (docx → pdf via LibreOffice)
+
+**Repo:** aut-proposta (mesma branch).
+
+**Files:**
+- Create: `aut-proposta/app/docx/pdf.py`
+- Modify: `aut-proposta/app/api/main.py` (rota `GET /propostas/{id}/pdf`)
+- Modify: `aut-proposta/Dockerfile` (instalar LibreOffice)
+- Test: `aut-proposta/tests/docx/test_pdf.py`, mais 1 teste em `tests/api/test_api.py`
+
+**Interfaces:**
+- Consumes: o `.docx` já gerado em `PROPOSTAS_DIR/proposta_<id>.docx`.
+- Produces:
+  - `app.docx.pdf.converter_para_pdf(docx: Path) -> Path | None` — converte via `soffice --headless --convert-to pdf` no mesmo diretório; `None` se o LibreOffice não estiver instalado; propaga erro do subprocesso em falha real.
+  - `GET /propostas/{id}/pdf` — converte on-demand (cacheia: se o `.pdf` já existe, serve direto); 404 se o `.docx` não existe; **501** se o conversor não está disponível no servidor.
+
+- [ ] **Step 1: Escrever os testes (falha primeiro)**
+
+`aut-proposta/tests/docx/test_pdf.py`:
+
+```python
+import shutil
+
+import pytest
+
+from app.docx.pdf import converter_para_pdf
+
+tem_soffice = bool(shutil.which("soffice") or shutil.which("libreoffice"))
+
+
+@pytest.mark.skipif(not tem_soffice, reason="LibreOffice (soffice) não instalado — validado no Docker")
+def test_converte_docx_gerado_para_pdf(tmp_path):
+    import datetime as dt
+    from app.docx.gerador import gerar_docx
+
+    cliente = {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"}
+    fechado = {
+        "orcamento": {"estrategia": "planilha", "subtotal": 3000, "total_imagens": 1,
+                      "externas": {"nome": "externas", "qtd": 1, "total": 3000,
+                                   "itens": [{"descricao": "Perspectiva Fachada", "preco": 3000, "fonte": "planilha"}]},
+                      "internas": {"nome": "internas", "qtd": 0, "total": 0, "itens": []},
+                      "plantas": {"nome": "plantas", "qtd": 0, "total": 0, "itens": []}},
+        "financeiro": {"subtotal": 3000, "desconto_pct": 0.0, "desconto_valor": 0.0,
+                       "total": 3000.0, "rotulo": ""},
+    }
+    docx = tmp_path / "p.docx"
+    gerar_docx(cliente, fechado, docx, data=dt.date(2026, 7, 19))
+    pdf = converter_para_pdf(docx)
+    assert pdf is not None and pdf.exists()
+    assert pdf.read_bytes()[:5] == b"%PDF-"
+
+
+def test_sem_soffice_devolve_none(tmp_path, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda nome: None)
+    arq = tmp_path / "p.docx"
+    arq.write_bytes(b"x")
+    assert converter_para_pdf(arq) is None
+```
+
+Em `aut-proposta/tests/api/test_api.py`, adicionar:
+
+```python
+def test_pdf_de_proposta_inexistente_404(cliente_api):
+    r = cliente_api.get("/propostas/99999/pdf", headers=HEAD)
+    assert r.status_code == 404
+```
+
+Run: `pytest tests/docx/test_pdf.py tests/api -v` → FAIL (ModuleNotFoundError: app.docx.pdf).
+
+- [ ] **Step 2: Implementar**
+
+`aut-proposta/app/docx/pdf.py`:
+
+```python
+"""Conversão docx -> pdf via LibreOffice headless (instalado no Docker)."""
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+
+def converter_para_pdf(docx: Path) -> Path | None:
+    """Converte no mesmo diretório. None se o LibreOffice não está instalado."""
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        return None
+    subprocess.run(
+        [soffice, "--headless", "--convert-to", "pdf",
+         "--outdir", str(docx.parent), str(docx)],
+        check=True, capture_output=True, timeout=120,
+    )
+    pdf = docx.with_suffix(".pdf")
+    return pdf if pdf.exists() else None
+```
+
+Em `aut-proposta/app/api/main.py`, importar `from app.docx.pdf import converter_para_pdf` e adicionar a rota:
+
+```python
+@app.get("/propostas/{proposta_id}/pdf", dependencies=[Depends(verificar_token)])
+def rota_download_pdf(proposta_id: int):
+    docx = _dir_saida() / f"proposta_{proposta_id}.docx"
+    pdf = docx.with_suffix(".pdf")
+    if not pdf.exists():
+        if not docx.exists():
+            raise HTTPException(404, "Proposta não encontrada")
+        pdf_gerado = converter_para_pdf(docx)
+        if pdf_gerado is None:
+            raise HTTPException(501, "Conversor PDF (LibreOffice) indisponível neste servidor")
+        pdf = pdf_gerado
+    return FileResponse(pdf, media_type="application/pdf",
+                        filename=f"proposta_{proposta_id}.pdf")
+```
+
+No `aut-proposta/Dockerfile`, logo após o `FROM`:
+
+```dockerfile
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libreoffice-writer fonts-crosextra-carlito \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+- [ ] **Step 3: Rodar e ver passar**
+
+Run: `pytest -q`
+Expected: tudo verde; `test_converte_docx_gerado_para_pdf` PULA se o LibreOffice não estiver instalado localmente (será validado no build Docker da Task 5).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add aut-proposta/app/docx/pdf.py aut-proposta/app/api/main.py aut-proposta/Dockerfile aut-proposta/tests/docx/test_pdf.py aut-proposta/tests/api/test_api.py
+git commit -m "feat(proposta): download em PDF (conversão LibreOffice on-demand)"
 ```
 
 ---
@@ -349,6 +521,7 @@ export interface Levantamento {
   fechado: Fechado
   estrategia_usada: string
   avisos: string[]
+  pendencias: string[]
 }
 
 export interface PropostaGerada {
@@ -373,6 +546,7 @@ const LEVANTAMENTO = {
   fechado: { financeiro: { total: 3000 } },
   estrategia_usada: 'planilha',
   avisos: [],
+  pendencias: [],
 }
 
 describe('useProposta', () => {
@@ -529,7 +703,9 @@ git commit -m "feat(proposta): tipos e hook de API do agente"
 **Interfaces:**
 - Consumes: `useProposta` + tipos (Task 3), `AgentShell`, `cn()`, lucide-react.
 - Produces: fluxo completo — descrever → "Precificar" → tela dividida (estrutura editável à esquerda, preview financeiro à direita) → "Gerar .docx" → resultado com download (via proxy `/api/tools/proposta/propostas/{id}/docx`) e link R2 quando houver.
-- Edições suportadas (o que o backend reprecifica): remover item de categoria, adicionar item (texto curto), mudar `desconto_pct`/`desconto_label`, trocar `estrategia`. Toda edição chama `reprecificar(estruturaEditada)`.
+- Edições suportadas (o que o backend reprecifica): remover item de categoria, adicionar item (texto curto), mudar `desconto_pct`/`desconto_label`, trocar `estrategia`, e **editar os dados do cliente** (empresa/ref/contato — campos sempre visíveis no topo do preview). Toda edição chama `reprecificar(estruturaEditada)`.
+- **Pendências**: `levantamento.pendencias` aparece como lista destacada (âmbar) no preview; o botão "Gerar" fica desabilitado enquanto `pendencias.length > 0`, com legenda "Complete as pendências para gerar".
+- **PDF**: `ResultadoPainel` ganha o botão "Baixar PDF" → `/api/tools/proposta/propostas/{id}/pdf` (ao lado do .docx). Se o backend responder 501, o navegador mostra o erro do proxy — aceitável nesta versão.
 
 - [ ] **Step 1: Teste do PreviewPainel (falha primeiro)**
 
@@ -568,9 +744,27 @@ const LEV: Levantamento = {
   },
   estrategia_usada: 'planilha',
   avisos: ['aviso de teste'],
+  pendencias: [],
 }
 
 describe('PreviewPainel', () => {
+  it('mostra pendências destacadas quando existem', () => {
+    const comPendencia = { ...LEV, pendencias: ['Informe o A/C — responsável que recebe a proposta.'] }
+    render(<PreviewPainel levantamento={comPendencia} onEditar={jest.fn()} carregando={false} />)
+    expect(screen.getByText(/Informe o A\/C/)).toBeInTheDocument()
+  })
+
+  it('editar empresa do cliente devolve estrutura atualizada', () => {
+    const onEditar = jest.fn()
+    render(<PreviewPainel levantamento={LEV} onEditar={onEditar} carregando={false} />)
+    const campo = screen.getByLabelText('Cliente')
+    fireEvent.change(campo, { target: { value: 'BRNPAR' } })
+    fireEvent.blur(campo)
+    expect(onEditar).toHaveBeenCalledWith(
+      expect.objectContaining({ cliente: expect.objectContaining({ empresa: 'BRNPAR' }) })
+    )
+  })
+
   it('mostra itens, totais e avisos', () => {
     render(<PreviewPainel levantamento={LEV} onEditar={jest.fn()} carregando={false} />)
     expect(screen.getByText('Perspectiva Fachada')).toBeInTheDocument()
@@ -654,7 +848,7 @@ export function EntradaPainel({ onPrecificar, carregando }: Props) {
 ```tsx
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type { CategoriaKey, Estrutura, Levantamento } from './types'
@@ -675,10 +869,32 @@ interface Props {
 }
 
 export function PreviewPainel({ levantamento, onEditar, carregando }: Props) {
-  const { estrutura, fechado, estrategia_usada, avisos } = levantamento
+  const { estrutura, fechado, estrategia_usada, avisos, pendencias } = levantamento
   const [novoItem, setNovoItem] = useState<Record<CategoriaKey, string>>({
     externas: '', internas: '', plantas: '',
   })
+  // Rascunho local dos campos do cliente; commit no blur/Enter para não
+  // reprecificar a cada tecla. Ressincroniza quando o backend responde.
+  const [cliente, setCliente] = useState(estrutura.cliente)
+  useEffect(() => {
+    setCliente(estrutura.cliente)
+  }, [estrutura.cliente])
+
+  const commitCliente = () => {
+    if (
+      cliente.empresa !== estrutura.cliente.empresa ||
+      cliente.ref !== estrutura.cliente.ref ||
+      cliente.contato !== estrutura.cliente.contato
+    ) {
+      onEditar({ ...estrutura, cliente })
+    }
+  }
+
+  const CAMPOS_CLIENTE = [
+    { chave: 'empresa', rotulo: 'Cliente', placeholder: 'construtora/incorporadora' },
+    { chave: 'ref', rotulo: 'Empreendimento', placeholder: 'nome do projeto' },
+    { chave: 'contato', rotulo: 'A/C', placeholder: 'quem recebe a proposta' },
+  ] as const
 
   const remover = (cat: CategoriaKey, idx: number) =>
     onEditar({ ...estrutura, [cat]: estrutura[cat].filter((_, i) => i !== idx) })
@@ -700,14 +916,33 @@ export function PreviewPainel({ levantamento, onEditar, carregando }: Props) {
         carregando && 'pointer-events-none opacity-60'
       )}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {estrutura.cliente.empresa} · {estrutura.cliente.ref}
-          </p>
-          <p className="text-xs text-gray-400">estratégia: {estrategia_usada}</p>
-        </div>
+      <div className="mb-4 grid gap-2 sm:grid-cols-3">
+        {CAMPOS_CLIENTE.map(({ chave, rotulo, placeholder }) => (
+          <label key={chave} className="block">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{rotulo}</span>
+            <input
+              aria-label={rotulo}
+              value={cliente[chave]}
+              placeholder={placeholder}
+              onChange={(e) => setCliente((c) => ({ ...c, [chave]: e.target.value }))}
+              onBlur={commitCliente}
+              onKeyDown={(e) => e.key === 'Enter' && commitCliente()}
+              className="mt-0.5 w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm text-[#1A1A2E] dark:border-gray-700 dark:bg-[#0F0F0F] dark:text-white"
+            />
+          </label>
+        ))}
       </div>
+      <p className="mb-3 text-xs text-gray-400">estratégia: {estrategia_usada}</p>
+
+      {pendencias.length > 0 && (
+        <ul className="mb-4 space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
+          {pendencias.map((p, i) => (
+            <li key={i} className="text-xs font-medium text-amber-700 dark:text-amber-300">
+              {p}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {(Object.keys(ROTULOS) as CategoriaKey[]).map((cat) => {
         const bloco = fechado.orcamento[cat]
@@ -824,10 +1059,19 @@ export function ResultadoPainel({ gerada, onNova }: Props) {
       </p>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
         <a
-          href={`/api/tools/proposta${gerada.download}`}
+          href={`/api/tools/proposta/propostas/${gerada.proposta_id}/pdf`}
           className={cn(
             'inline-flex items-center gap-2 rounded-lg bg-brand-purple px-4 py-2',
             'text-sm font-semibold text-white hover:opacity-90'
+          )}
+        >
+          <Download className="h-4 w-4" /> Baixar PDF
+        </a>
+        <a
+          href={`/api/tools/proposta${gerada.download}`}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-lg border border-brand-purple px-4 py-2',
+            'text-sm font-semibold text-brand-purple hover:bg-brand-purple/10'
           )}
         >
           <Download className="h-4 w-4" /> Baixar .docx
@@ -907,7 +1151,7 @@ export function PropostaAgent() {
               />
               <button
                 onClick={() => gerar(levantamento.estrutura)}
-                disabled={carregando}
+                disabled={carregando || levantamento.pendencias.length > 0}
                 className={cn(
                   'mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg',
                   'bg-brand-purple px-4 py-2.5 text-sm font-semibold text-white',
@@ -915,8 +1159,13 @@ export function PropostaAgent() {
                 )}
               >
                 <FileText className="h-4 w-4" />
-                {carregando ? 'Gerando…' : 'Gerar .docx'}
+                {carregando ? 'Gerando…' : 'Gerar proposta'}
               </button>
+              {levantamento.pendencias.length > 0 && (
+                <p className="mt-1 text-center text-xs text-amber-600 dark:text-amber-400">
+                  Complete as pendências para gerar.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -929,11 +1178,11 @@ export function PropostaAgent() {
 - [ ] **Step 3: Rodar testes e ver passar**
 
 Run: `npx jest src/components/agents/proposta --silent`
-Expected: 5 passed (3 do hook + 2 do preview).
+Expected: 7 passed (3 do hook + 4 do preview).
 
 - [ ] **Step 4: Verificação manual local (obrigatória)**
 
-Com `uvicorn app.api.main:app` rodando em `aut-proposta/` (com `.env` carregado no ambiente) e `npm run dev` no hub: abrir `/tools/proposta`, colar o exemplo, Precificar → preview com valores; remover um item → total recalcula; mudar desconto → recalcula; Gerar .docx → baixar e abrir o arquivo. Registrar o resultado no relatório.
+Com `uvicorn app.api.main:app` rodando em `aut-proposta/` (com `.env` carregado no ambiente) e `npm run dev` no hub: abrir `/tools/proposta`, colar um texto SEM o A/C → Precificar → pendência âmbar aparece e "Gerar" fica desabilitado; preencher o A/C no campo → pendência some e o botão habilita; remover um item → total recalcula; mudar desconto → recalcula; Gerar → baixar o .docx E o PDF (PDF exige LibreOffice local — sem ele, esperar o erro 501 e validar o PDF na Task 5 em produção). Registrar o resultado no relatório.
 
 - [ ] **Step 5: Build e commit**
 
@@ -984,7 +1233,10 @@ curl -s -X POST https://<dominio-railway>/levantamento \
   -H "Authorization: Bearer $API_TOKEN" -H "content-type: application/json" \
   -d '{"texto": "Cliente: SMOKE TEST, ref Piloto\nExternas: Fachada"}'
 # esperado: JSON com fechado.orcamento.externas.itens[0].preco = 3000
+# e pendencias contendo o aviso de A/C faltando
 ```
+
+Validar o PDF em produção (o Docker tem LibreOffice): gerar uma proposta de teste via `POST /propostas` e baixar `GET /propostas/{id}/pdf` → arquivo começa com `%PDF-`. Remover a proposta de teste do NEON/R2 ao final.
 
 - [ ] **Step 4: Apontar o hub para produção**
 
@@ -1004,6 +1256,9 @@ Hub: push da branch `feat/proposta-agent` + PR. aut-proposta: push da branch `fe
 - Preview mostra tudo antes de gerar (§5) → PreviewPainel (itens, subtotal, desconto editável, total, avisos). ✔
 - Controles de desconto recalculam por código (§6 passo 4) → edição chama `/levantamento` com `estrutura` (Task 1); nenhum cálculo no front além de exibição. ✔
 - Download do .docx no hub (§6 passo 5) → ResultadoPainel via proxy binário. ✔
+- **PDF** (decisão do usuário 2026-07-19; §9 revogado) → Task 1B (`converter_para_pdf` + `GET /propostas/{id}/pdf` + LibreOffice no Docker) + botão "Baixar PDF" no ResultadoPainel; teste local pula sem soffice e a produção é validada na Task 5. ✔
+- **Requisitos sempre preenchidos** (decisão do usuário) → `pendencias` no `/levantamento` (Task 1), campos de cliente editáveis no PreviewPainel e trava do "Gerar" no PropostaAgent (Task 4). ✔
+- **Nenhuma lógica no hub** (decisão do usuário) → hub só UI + proxy; pendências, preços, IA e PDF são todos calculados no serviço; o front apenas exibe e repassa. ✔
 - Auth pelo hub (§3) → proxy com sessão + `tool_permissions` + Bearer server-side. ✔
 - Deploy Railway padrão LUMEN (§2) → Task 5. ✔
 
