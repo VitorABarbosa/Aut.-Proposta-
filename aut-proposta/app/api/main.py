@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -72,11 +73,17 @@ def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
     pend: list[str] = []
     cli = estrutura.get("cliente", {})
 
-    # Check se cliente foi marcado explicitamente ou é um fallback do parser
-    avisos = estrutura.get("_avisos", [])
-    cliente_foi_assumido = any("Cliente não foi marcado explicitamente" in a for a in avisos)
+    # Cliente assumido pelo parser (não marcado explicitamente) só conta como
+    # pendência enquanto a empresa CONTINUAR sendo o valor assumido — a UI
+    # reenvia a estrutura com os _avisos antigos, e editar o campo deve limpar.
+    assumido = None
+    for a in estrutura.get("_avisos", []):
+        m = re.search(r"assumi '([^']+)'", a)
+        if m:
+            assumido = m.group(1)
+            break
 
-    if not cli.get("empresa") or cli["empresa"] == "CLIENTE" or cliente_foi_assumido:
+    if not cli.get("empresa") or cli["empresa"] in ("CLIENTE", assumido):
         pend.append("Informe a construtora/incorporadora (cliente).")
     if not cli.get("ref") or cli["ref"] == "PROJETO":
         pend.append("Informe o empreendimento/projeto (ref).")

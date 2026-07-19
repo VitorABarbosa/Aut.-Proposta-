@@ -147,3 +147,25 @@ def test_download_inexistente_404(cliente_api):
 def test_propostas_sem_texto_nem_estrutura_422(cliente_api):
     r = cliente_api.post("/propostas", json={}, headers=HEAD)
     assert r.status_code == 422
+
+
+def test_pendencia_de_cliente_assumido_some_apos_edicao(cliente_api):
+    """Regressão: a UI reenvia a estrutura com _avisos antigos; a pendência de
+    cliente assumido só vale enquanto a empresa continuar sendo a assumida."""
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False,
+        "_avisos": ["Cliente não foi marcado explicitamente — assumi 'Externas: Fachada' (1ª linha)."],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 200
+    pend = r.json()["pendencias"]
+    # Empresa foi editada para GALLI (≠ valor assumido) -> não pode haver pendência de cliente.
+    assert not any("construtora" in p.lower() for p in pend)
+
+    # Mas se a empresa AINDA é o valor assumido, a pendência permanece.
+    estrutura["cliente"]["empresa"] = "Externas: Fachada"
+    r2 = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert any("construtora" in p.lower() for p in r2.json()["pendencias"])
