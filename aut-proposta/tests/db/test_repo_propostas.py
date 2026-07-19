@@ -1,6 +1,8 @@
 import pytest
 
 from app.db.repo_propostas import (
+    excluir_proposta,
+    obter_estrutura_de_proposta,
     salvar_proposta,
     ultima_proposta_estruturada,
     upsert_cliente,
@@ -84,3 +86,53 @@ def test_ultima_proposta_desempata_por_id_quando_mesma_data(db):
     ult = ultima_proposta_estruturada(db, cid)
     assert ult["externas"]["itens"][0] == {"desc": "Perspectiva Fachada", "preco": 4000}
     assert ult["externas"]["total"] == 4000
+
+
+def test_obter_estrutura_de_proposta(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "GALLI", "Daniel")
+    pid = salvar_proposta(db, cid, _fechado_exemplo(), referencia="Residencial Aurora")
+
+    estrutura = obter_estrutura_de_proposta(db, pid)
+    assert estrutura is not None
+    assert estrutura["cliente"]["empresa"] == "GALLI"
+    assert estrutura["cliente"]["contato"] == "Daniel"
+    assert estrutura["cliente"]["ref"] == "Residencial Aurora"
+    assert estrutura["desconto_pct"] == 10.0
+    assert len(estrutura["externas"]) == 1
+    assert "Perspectiva Fachada" in estrutura["externas"]
+    assert estrutura["estrategia"] == "planilha"
+    assert estrutura["mostrar_precos_individuais"] is False
+
+
+def test_obter_estrutura_proposta_nao_existe(db):
+    aplicar_schema(db)
+    assert obter_estrutura_de_proposta(db, 999) is None
+
+
+def test_excluir_proposta(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "GALLI")
+    pid = salvar_proposta(db, cid, _fechado_exemplo())
+
+    # Verifica que existe antes de apagar
+    with db.cursor() as cur:
+        cur.execute("SELECT id FROM propostas WHERE id = %s", (pid,))
+        assert cur.fetchone() is not None
+
+    # Apaga
+    resultado = excluir_proposta(db, pid)
+    assert resultado is True
+
+    # Verifica que foi apagada
+    with db.cursor() as cur:
+        cur.execute("SELECT id FROM propostas WHERE id = %s", (pid,))
+        assert cur.fetchone() is None
+        cur.execute("SELECT count(*) FROM proposta_itens WHERE proposta_id = %s", (pid,))
+        assert cur.fetchone()[0] == 0
+
+
+def test_excluir_proposta_nao_existe(db):
+    aplicar_schema(db)
+    resultado = excluir_proposta(db, 999)
+    assert resultado is False
