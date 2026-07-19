@@ -1,4 +1,4 @@
-"""Valida o .docx gerado reabrindo com python-docx e inspecionando o texto."""
+"""Valida o .docx gerado (modelo oficial PROPOSTA_EXEMPLO) reabrindo com python-docx."""
 import datetime as dt
 
 import pytest
@@ -47,21 +47,38 @@ def test_gera_docx_com_conteudo_essencial(tmp_path):
     assert saida.exists()
     texto = _texto_completo(saida)
 
-    assert "PROPOSTA COMERCIAL" in texto
-    assert "GALLI" in texto
-    assert "EMPREENDIMENTO TESTE" in texto
-    assert "DANIEL PUCCI" in texto
-    assert "R$33.660,00" in texto            # investimento final
-    assert "R$38.250,00" in texto            # valor bruto
-    assert "12% parceria" in texto           # rótulo do desconto
+    # Cabeçalho no formato do modelo
+    assert "PROPOSTA DE IMAGENS, FILMES E TECNOLOGIAS 3D" in texto
+    assert "GALLI - REF: EMPREENDIMENTO TESTE" in texto
+    assert "A/C: DANIEL PUCCI" in texto
+    # Valores (o investimento usa "R$ " com espaço, como no modelo)
+    assert "R$ 33.660,00" in texto           # investimento final
+    assert "R$38.250,00" in texto            # valor bruto (desconto presente)
+    assert "12% parceria" in texto
     assert "Trinta e Três Mil, Seiscentos e Sessenta Reais" in texto
-    assert "Perspectiva Fachada" in texto
-    assert "Planta Humanizada Tipo" in texto
+    assert "Valor total: " in texto
+    # Itens numerados
+    assert "1. Perspectiva Fachada" in texto
+    assert "1. Planta Humanizada Tipo" in texto
     assert "19 de Julho de 2026" in texto
-    # Seções fixas
-    for secao in ("APRESENTAÇÃO", "FORMA DE PAGAMENTO", "PRAZOS DE ENTREGA",
-                  "CONSIDERAÇÕES", "ENTREGA FINAL"):
-        assert secao in texto
+    # Estrutura numerada do modelo oficial
+    for trecho in (
+        "1  – APRESENTAÇÃO FLYING STUDIO",
+        "Nascemos para dar forma ao invisível",
+        "2  – ITENS A SEREM DESENVOLVIDOS / INVESTIMENTOS:",
+        "2.1 Ilustrações Externas",
+        "2.2 Ilustrações Internas",
+        "2.3 Plantas Humanizadas 2D",
+        "2.4 INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:",
+        "2.5 FORMA DE PAGAMENTO:",
+        "3  – PRAZOS / SOLICITAÇÕES / CONSIDERAÇÕES / ENTREGAS",
+        "3.1 Shades",
+        "3.2 SOLICITAÇÕES:",
+        "3.3 CONSIDERAÇÕES IMAGENS:",
+        "3.4 ENTREGA FINAL:",
+        "De acordo,",
+    ):
+        assert trecho in texto
 
 
 def test_sem_desconto_nao_mostra_valor_bruto(tmp_path):
@@ -71,21 +88,29 @@ def test_sem_desconto_nao_mostra_valor_bruto(tmp_path):
     saida = tmp_path / "p.docx"
     gerar_docx(CLIENTE, fechado, saida)
     texto = _texto_completo(saida)
-    assert "VALOR BRUTO" not in texto
-    assert "R$38.250,00" in texto
+    assert "Valor bruto" not in texto
+    assert "R$ 38.250,00" in texto
 
 
-def test_categoria_vazia_omitida(tmp_path):
+def test_categoria_vazia_omitida_e_renumera(tmp_path):
     fechado = _fechado_galli()
     fechado["orcamento"]["plantas"] = {"nome": "plantas", "qtd": 0, "total": 0, "itens": []}
     saida = tmp_path / "p.docx"
     gerar_docx(CLIENTE, fechado, saida)
     texto = _texto_completo(saida)
-    assert "PLANTAS HUMANIZADAS" not in texto
+    assert "Plantas Humanizadas 2D" not in texto
+    # Com 2 categorias, investimento e pagamento renumeram para 2.3/2.4.
+    assert "2.3 INVESTIMENTO PARA O DESENVOLVIMENTOS" in texto
+    assert "2.4 FORMA DE PAGAMENTO:" in texto
 
 
 def test_precos_individuais_opcionais(tmp_path):
     saida = tmp_path / "p.docx"
     gerar_docx(CLIENTE, _fechado_galli(), saida, mostra_precos_individuais=True)
     texto = _texto_completo(saida)
-    assert "R$3.000,00" in texto  # preço do item aparece na tabela
+    assert "1. Perspectiva Fachada — R$3.000,00" in texto
+
+    saida2 = tmp_path / "p2.docx"
+    gerar_docx(CLIENTE, _fechado_galli(), saida2, mostra_precos_individuais=False)
+    texto2 = _texto_completo(saida2)
+    assert "— R$3.000,00" not in texto2  # sem preço por item; só o Valor total
