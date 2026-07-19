@@ -142,10 +142,16 @@ def test_destaques_inline_do_modelo(tmp_path):
     runs = runs_de("Valor total:")
     assert all(x.bold for x in runs if x.text.strip())
 
-    # Assinatura com marca-texto.
+    # Assinatura: linha + nome do cliente centralizado com marca-texto.
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
     ultimo = doc.paragraphs[-1]
+    linha = doc.paragraphs[-2]
     assert ultimo.text == "GALLI"
+    assert ultimo.alignment == WD_ALIGN_PARAGRAPH.CENTER
     assert ultimo.runs[0].font.highlight_color is not None
+    assert set(linha.text) == {"_"}  # linha de assinatura
+    assert linha.alignment == WD_ALIGN_PARAGRAPH.CENTER
 
 
 def test_precos_individuais_opcionais(tmp_path):
