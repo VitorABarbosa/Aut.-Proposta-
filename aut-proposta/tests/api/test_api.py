@@ -98,6 +98,47 @@ def test_gerar_por_estrutura_revisada(cliente_api):
     assert r.json()["fechado"]["orcamento"]["subtotal"] == 3000
 
 
+def test_levantamento_por_estrutura_reprecifica(cliente_api):
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada vista da calçada"], "internas": [], "plantas": [],
+        "desconto_pct": 5.0, "desconto_label": "ajuste", "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["estrutura"]["cliente"]["empresa"] == "GALLI"
+    assert corpo["fechado"]["orcamento"]["subtotal"] == 3000
+    assert corpo["fechado"]["financeiro"]["desconto_pct"] == 5.0
+
+
+def test_levantamento_sem_texto_nem_estrutura_422(cliente_api):
+    r = cliente_api.post("/levantamento", json={}, headers=HEAD)
+    assert r.status_code == 422
+
+
+def test_pendencias_apontam_requisitos_faltantes(cliente_api):
+    # Texto sem A/C e sem ref: parser preenche defaults, que contam como faltando.
+    r = cliente_api.post("/levantamento", json={"texto": "Externas: Fachada"}, headers=HEAD)
+    assert r.status_code == 200
+    pend = r.json()["pendencias"]
+    assert any("construtora" in p.lower() or "cliente" in p.lower() for p in pend)
+    assert any("a/c" in p.lower() or "respons" in p.lower() for p in pend)
+    assert any("empreendimento" in p.lower() or "projeto" in p.lower() for p in pend)
+
+
+def test_pendencias_vazia_quando_completo(cliente_api):
+    r = cliente_api.post("/levantamento", json={"texto": TEXTO}, headers=HEAD)
+    assert r.status_code == 200
+    assert r.json()["pendencias"] == []
+
+
+def test_pdf_de_proposta_inexistente_404(cliente_api):
+    r = cliente_api.get("/propostas/99999/pdf", headers=HEAD)
+    assert r.status_code == 404
+
+
 def test_download_inexistente_404(cliente_api):
     r = cliente_api.get("/propostas/99999/docx", headers=HEAD)
     assert r.status_code == 404
@@ -106,3 +147,40 @@ def test_download_inexistente_404(cliente_api):
 def test_propostas_sem_texto_nem_estrutura_422(cliente_api):
     r = cliente_api.post("/propostas", json={}, headers=HEAD)
     assert r.status_code == 422
+
+
+def test_pendencia_de_cliente_assumido_some_apos_edicao(cliente_api):
+    """Regressão: a UI reenvia a estrutura com _avisos antigos; a pendência de
+    cliente assumido só vale enquanto a empresa continuar sendo a assumida."""
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False,
+        "_avisos": ["Cliente não foi marcado explicitamente — assumi 'Externas: Fachada' (1ª linha)."],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 200
+    pend = r.json()["pendencias"]
+    # Empresa foi editada para GALLI (≠ valor assumido) -> não pode haver pendência de cliente.
+    assert not any("construtora" in p.lower() for p in pend)
+
+    # Mas se a empresa AINDA é o valor assumido, a pendência permanece.
+    estrutura["cliente"]["empresa"] = "Externas: Fachada"
+    r2 = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert any("construtora" in p.lower() for p in r2.json()["pendencias"])
+
+
+def test_desconto_fora_de_faixa_da_422(cliente_api):
+    estrutura = {
+        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+        "externas": ["Fachada"], "internas": [], "plantas": [],
+        "desconto_pct": 150.0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 422
+    assert "150" in r.json()["detail"] or "percentual" in r.json()["detail"].lower()
+
+    r2 = cliente_api.post("/propostas", json={"estrutura": estrutura}, headers=HEAD)
+    assert r2.status_code == 422

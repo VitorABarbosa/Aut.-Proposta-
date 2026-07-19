@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -14,6 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from app.db.conexao import get_conn
+from app.docx.pdf import converter_para_pdf
 from app.ia.parser import parse
 from app.servicos.proposta import gerar, levantar
 
@@ -45,7 +47,14 @@ def verificar_token(request: Request) -> None:
 
 
 class CorpoLevantamento(BaseModel):
-    texto: str
+    texto: str | None = None
+    estrutura: dict | None = None
+
+    @model_validator(mode="after")
+    def _um_dos_dois(self):
+        if self.texto is None and self.estrutura is None:
+            raise ValueError("Envie 'texto' ou 'estrutura'.")
+        return self
 
 
 class CorpoProposta(BaseModel):
@@ -59,6 +68,32 @@ class CorpoProposta(BaseModel):
         return self
 
 
+def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
+    """Requisitos obrigatórios de toda proposta; defaults do parser contam como faltando."""
+    pend: list[str] = []
+    cli = estrutura.get("cliente", {})
+
+    # Cliente assumido pelo parser (não marcado explicitamente) só conta como
+    # pendência enquanto a empresa CONTINUAR sendo o valor assumido — a UI
+    # reenvia a estrutura com os _avisos antigos, e editar o campo deve limpar.
+    assumido = None
+    for a in estrutura.get("_avisos", []):
+        m = re.search(r"assumi '([^']+)'", a)
+        if m:
+            assumido = m.group(1)
+            break
+
+    if not cli.get("empresa") or cli["empresa"] in ("CLIENTE", assumido):
+        pend.append("Informe a construtora/incorporadora (cliente).")
+    if not cli.get("ref") or cli["ref"] == "PROJETO":
+        pend.append("Informe o empreendimento/projeto (ref).")
+    if not cli.get("contato") or cli["contato"] == "—":
+        pend.append("Informe o A/C — responsável que recebe a proposta.")
+    if fechado["orcamento"]["total_imagens"] == 0:
+        pend.append("Nenhum item identificado — liste as imagens/serviços contratados.")
+    return pend
+
+
 @app.get("/saude")
 def saude():
     return {"ok": True}
@@ -66,10 +101,12 @@ def saude():
 
 @app.post("/levantamento", dependencies=[Depends(verificar_token)])
 def rota_levantamento(corpo: CorpoLevantamento):
-    estrutura = parse(corpo.texto)
+    estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
     conn = _abrir_conn()
     try:
         lev = levantar(conn, estrutura)
+    except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
+        raise HTTPException(422, str(e))
     finally:
         _fechar_conn(conn)
     return {
@@ -77,6 +114,7 @@ def rota_levantamento(corpo: CorpoLevantamento):
         "fechado": lev["fechado"],
         "estrategia_usada": lev["estrategia_usada"],
         "avisos": lev["avisos"],
+        "pendencias": _pendencias(estrutura, lev["fechado"]),
     }
 
 
@@ -86,6 +124,8 @@ def rota_gerar(corpo: CorpoProposta):
     conn = _abrir_conn()
     try:
         out = gerar(conn, estrutura, _dir_saida())
+    except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
+        raise HTTPException(422, str(e))
     finally:
         _fechar_conn(conn)
     return {
@@ -104,3 +144,18 @@ def rota_download(proposta_id: int):
         raise HTTPException(404, "Proposta não encontrada")
     return FileResponse(caminho, media_type=MIME_DOCX,
                         filename=f"proposta_{proposta_id}.docx")
+
+
+@app.get("/propostas/{proposta_id}/pdf", dependencies=[Depends(verificar_token)])
+def rota_download_pdf(proposta_id: int):
+    docx = _dir_saida() / f"proposta_{proposta_id}.docx"
+    pdf = docx.with_suffix(".pdf")
+    if not pdf.exists():
+        if not docx.exists():
+            raise HTTPException(404, "Proposta não encontrada")
+        pdf_gerado = converter_para_pdf(docx)
+        if pdf_gerado is None:
+            raise HTTPException(501, "Conversor PDF (LibreOffice) indisponível neste servidor")
+        pdf = pdf_gerado
+    return FileResponse(pdf, media_type="application/pdf",
+                        filename=f"proposta_{proposta_id}.pdf")
