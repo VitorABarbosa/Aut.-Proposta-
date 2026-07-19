@@ -346,9 +346,14 @@ def gerar_docx(
     # ===== Assinatura =====
     p = _par(doc, antes=16, depois=12)
     _run(p, f"São Paulo, {data_extenso(data)}.")
-    p = _par(doc, depois=2)
+    p = _par(doc, depois=24)
     _run(p, "De acordo,")
+    # Linha de assinatura com o nome do cliente centralizado abaixo dela.
+    p = _par(doc, depois=2)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p, "_" * 60)
     p = _par(doc, depois=0)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p, cliente["empresa"].upper(), estilo="bh")
 
     saida.parent.mkdir(parents=True, exist_ok=True)
