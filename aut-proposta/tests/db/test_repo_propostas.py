@@ -139,27 +139,18 @@ def test_excluir_proposta_nao_existe(db):
     assert resultado is False
 
 
-def test_listar_propostas(db):
+def test_listar_propostas_mais_recente_primeiro(db):
     aplicar_schema(db)
-    cid = upsert_cliente(db, "GALLI")
-    pid1 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="Aurora")
-    pid2 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="Aurora 2")
+    cid = upsert_cliente(db, "GALLI", "Daniel")
+    p1 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="R00")
+    p2 = salvar_proposta(db, cid, _fechado_exemplo(), referencia="R01")
 
-    propostas = listar_propostas(db, "GALLI")
-    assert len(propostas) >= 2
-    pids = [p["proposta_id"] for p in propostas]
-    assert pid1 in pids and pid2 in pids
-    # Verifica campos esperados
-    for p in propostas:
-        assert "proposta_id" in p
-        assert "cliente" in p
-        assert "referencia" in p
-        assert "subtotal" in p
-        assert "total" in p
-        assert "download" in p
+    todas = listar_propostas(db)
+    assert [p["id"] for p in todas] == [p2, p1]
+    assert todas[0]["cliente"] == "GALLI"
+    assert todas[0]["referencia"] == "R01"
+    assert float(todas[0]["total"]) == 5085.0
 
-
-def test_listar_propostas_cliente_inexistente(db):
-    aplicar_schema(db)
-    propostas = listar_propostas(db, "CLIENTE NOVO")
-    assert propostas == []
+    so_galli = listar_propostas(db, cliente="galli")
+    assert len(so_galli) == 2
+    assert listar_propostas(db, cliente="OUTRO") == []

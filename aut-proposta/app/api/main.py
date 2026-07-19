@@ -164,12 +164,15 @@ def rota_download_pdf(proposta_id: int):
 
 
 @app.get("/propostas", dependencies=[Depends(verificar_token)])
-def rota_listar_propostas(cliente: str):
+def rota_listar_propostas(cliente: str | None = None):
     conn = _abrir_conn()
     try:
         propostas = listar_propostas(conn, cliente)
     finally:
         _fechar_conn(conn)
+    for p in propostas:
+        p["download"] = f"/propostas/{p['id']}/docx"
+        p["pdf"] = f"/propostas/{p['id']}/pdf"
     return {"propostas": propostas}
 
 
@@ -187,44 +190,35 @@ def rota_chat(corpo: CorpoChat):
         _fechar_conn(conn)
 
 
+def _chaves_r2_da_proposta(docx_url: str | None, proposta_id: int) -> list[str]:
+    if docx_url and "/Propostas/" in docx_url:
+        chave = "Propostas/" + docx_url.split("/Propostas/", 1)[1]
+    else:
+        chave = f"propostas/proposta_{proposta_id}.docx"  # padrão legado
+    return [chave]
+
+
 @app.delete("/propostas/{proposta_id}", dependencies=[Depends(verificar_token)])
 def rota_deletar_proposta(proposta_id: int):
     conn = _abrir_conn()
     try:
-        # Primeiro obtém a proposta para recuperar a chave R2
-        from app.db.repo_propostas import obter_estrutura_de_proposta
-        estrutura = obter_estrutura_de_proposta(conn, proposta_id)
-        if not estrutura:
-            raise HTTPException(404, "Proposta não encontrada")
-
-        # Tenta recuperar a chave R2 para exclusão (se disponível em docx_url)
         with conn.cursor() as cur:
             cur.execute("SELECT docx_url FROM propostas WHERE id = %s", (proposta_id,))
             row = cur.fetchone()
-            docx_url = row[0] if row else None
-
-        # Apaga a proposta do banco
-        resultado = excluir_proposta(conn, proposta_id)
-        if not resultado:
+        docx_url = row[0] if row else None
+        if row is None or not excluir_proposta(conn, proposta_id):
             raise HTTPException(404, "Proposta não encontrada")
-
-        # Tenta apagar do R2 (será None se não estava subida)
-        if docx_url:
-            # Extrai a chave da URL (está no final após o último /)
-            chave = docx_url.split("/")[-3:] if "/" in docx_url else []
-            if chave and len(chave) >= 3:
-                # Reconstrói a chave completa
-                chave_r2 = f"Propostas/{chave[-3]}/{chave[-2]}/{chave[-1]}"
-                excluir_objetos([chave_r2])
-
-        # Apaga o arquivo local se existir
-        docx_path = _dir_saida() / f"proposta_{proposta_id}.docx"
-        if docx_path.exists():
-            docx_path.unlink()
-        pdf_path = docx_path.with_suffix(".pdf")
-        if pdf_path.exists():
-            pdf_path.unlink()
-
+        # Os SELECTs acima abrem transação implícita na conexão, o que rebaixa
+        # o conn.transaction() de excluir_proposta a SAVEPOINT — sem este
+        # commit, o close() da conexão descartaria a exclusão (mesmo bug de
+        # app/servicos/proposta.py:gerar).
+        conn.commit()
     finally:
         _fechar_conn(conn)
+
+    excluir_objetos(_chaves_r2_da_proposta(docx_url, proposta_id))
+    for ext in (".docx", ".pdf"):
+        arq = _dir_saida() / f"proposta_{proposta_id}{ext}"
+        if arq.exists():
+            arq.unlink()
     return {"excluida": proposta_id}

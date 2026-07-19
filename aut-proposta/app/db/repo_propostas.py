@@ -128,24 +128,21 @@ def excluir_proposta(conn: psycopg.Connection, proposta_id: int) -> bool:
             return cur.rowcount > 0
 
 
-def listar_propostas(conn: psycopg.Connection, cliente_nome: str) -> list[dict]:
-    """Lista todas as propostas de um cliente (por nome normalizado)."""
-    cliente_norm = normalizar(cliente_nome)
+def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> list[dict]:
+    """Lista propostas (mais recente primeiro), com filtro opcional por cliente."""
+    sql = (
+        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url "
+        "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
+    )
+    params: tuple = ()
+    if cliente:
+        sql += "WHERE c.nome_norm = %s "
+        params = (normalizar(cliente),)
+    sql += "ORDER BY p.id DESC"
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT p.id, c.nome, p.referencia, p.subtotal, p.total "
-            "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
-            "WHERE c.nome_norm = %s ORDER BY p.data DESC, p.id DESC",
-            (cliente_norm,),
-        )
-        propostas = []
-        for pid, cnome, ref, subtotal, total in cur.fetchall():
-            propostas.append({
-                "proposta_id": pid,
-                "cliente": cnome,
-                "referencia": ref or "",
-                "subtotal": float(subtotal),
-                "total": float(total),
-                "download": f"/propostas/{pid}/docx",
-            })
-    return propostas
+        cur.execute(sql, params)
+        return [
+            {"id": i, "cliente": nome, "referencia": ref,
+             "data": data.isoformat(), "total": float(total), "docx_url": url}
+            for i, nome, ref, data, total, url in cur.fetchall()
+        ]

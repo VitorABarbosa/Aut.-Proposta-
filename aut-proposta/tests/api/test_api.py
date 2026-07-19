@@ -186,39 +186,18 @@ def test_desconto_fora_de_faixa_da_422(cliente_api):
     assert r2.status_code == 422
 
 
-def test_listar_propostas_por_cliente(cliente_api):
-    # Cria duas propostas para GALLI
-    estrutura_galli = {
-        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
-        "externas": ["Fachada"], "internas": [], "plantas": [],
-        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
-        "mostrar_precos_individuais": False, "_avisos": [],
-    }
-    r1 = cliente_api.post("/propostas", json={"estrutura": estrutura_galli}, headers=HEAD)
-    assert r1.status_code == 200
-    pid1 = r1.json()["proposta_id"]
-
-    r2 = cliente_api.post("/propostas", json={"estrutura": estrutura_galli}, headers=HEAD)
-    assert r2.status_code == 200
-    pid2 = r2.json()["proposta_id"]
-
-    # Lista propostas de GALLI
-    r = cliente_api.get("/propostas?cliente=GALLI", headers=HEAD)
+def test_listar_propostas_endpoint(cliente_api):
+    r0 = cliente_api.post("/propostas", json={"texto": TEXTO}, headers=HEAD)
+    pid = r0.json()["proposta_id"]
+    r = cliente_api.get("/propostas", headers=HEAD)
     assert r.status_code == 200
-    corpo = r.json()
-    assert "propostas" in corpo
-    propostas = corpo["propostas"]
-    assert len(propostas) >= 2
-    pids = [p["proposta_id"] for p in propostas]
-    assert pid1 in pids and pid2 in pids
-    # Verifica que cada proposta tem campos esperados
-    for p in propostas:
-        assert "proposta_id" in p
-        assert "cliente" in p
-        assert "referencia" in p
-        assert "subtotal" in p
-        assert "total" in p
-        assert "download" in p
+    lista = r.json()["propostas"]
+    assert lista[0]["id"] == pid
+    assert lista[0]["cliente"] == "GALLI"
+    assert lista[0]["download"] == f"/propostas/{pid}/docx"
+    assert lista[0]["pdf"] == f"/propostas/{pid}/pdf"
+    r2_ = cliente_api.get("/propostas", params={"cliente": "NAOEXISTE"}, headers=HEAD)
+    assert r2_.json()["propostas"] == []
 
 
 def test_listar_propostas_sem_auth_401(cliente_api):
@@ -226,39 +205,48 @@ def test_listar_propostas_sem_auth_401(cliente_api):
     assert r.status_code == 401
 
 
-def test_deletar_proposta(cliente_api):
-    # Cria uma proposta
-    estrutura = {
-        "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
-        "externas": ["Fachada"], "internas": [], "plantas": [],
-        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
-        "mostrar_precos_individuais": False, "_avisos": [],
-    }
-    r_criar = cliente_api.post("/propostas", json={"estrutura": estrutura}, headers=HEAD)
-    assert r_criar.status_code == 200
-    pid = r_criar.json()["proposta_id"]
+def test_excluir_proposta_endpoint(cliente_api, monkeypatch):
+    chaves_apagadas = []
+    monkeypatch.setattr("app.api.main.excluir_objetos",
+                        lambda chaves: chaves_apagadas.extend(chaves) or len(chaves))
+    r0 = cliente_api.post("/propostas", json={"texto": TEXTO}, headers=HEAD)
+    pid = r0.json()["proposta_id"]
 
-    # Deleta a proposta
     r = cliente_api.delete(f"/propostas/{pid}", headers=HEAD)
     assert r.status_code == 200
-    corpo = r.json()
-    assert corpo["excluida"] == pid
+    assert r.json() == {"excluida": pid}
+    assert any(str(pid) in c for c in chaves_apagadas)
 
-    # Verifica que a proposta foi deletada (não é mais listada)
-    r_lista = cliente_api.get("/propostas?cliente=GALLI", headers=HEAD)
-    assert r_lista.status_code == 200
-    pids = [p["proposta_id"] for p in r_lista.json()["propostas"]]
-    assert pid not in pids
-
-
-def test_deletar_proposta_inexistente_404(cliente_api):
-    r = cliente_api.delete("/propostas/99999", headers=HEAD)
-    assert r.status_code == 404
+    assert cliente_api.delete(f"/propostas/{pid}", headers=HEAD).status_code == 404
+    assert cliente_api.get(f"/propostas/{pid}/docx", headers=HEAD).status_code == 404
 
 
 def test_deletar_proposta_sem_auth_401(cliente_api):
     r = cliente_api.delete("/propostas/1")
     assert r.status_code == 401
+
+
+def test_deletar_proposta_persiste_apos_fechar_conexao(cliente_api, db, monkeypatch):
+    """Regressão: os SELECTs anteriores ao DELETE abrem transação implícita e
+    rebaixam o conn.transaction() de excluir_proposta a SAVEPOINT — sem commit
+    explícito na rota, a exclusão seria descartada ao fechar a conexão."""
+    monkeypatch.setattr("app.api.main.excluir_objetos", lambda chaves: len(chaves))
+    r0 = cliente_api.post("/propostas", json={"texto": TEXTO}, headers=HEAD)
+    pid = r0.json()["proposta_id"]
+
+    r = cliente_api.delete(f"/propostas/{pid}", headers=HEAD)
+    assert r.status_code == 200
+
+    from tests.conftest import DSN_TESTE
+    from app.db.conexao import get_conn
+
+    outra = get_conn(DSN_TESTE)
+    try:
+        with outra.cursor() as cur:
+            cur.execute("SELECT count(*) FROM propostas WHERE id = %s", (pid,))
+            assert cur.fetchone()[0] == 0
+    finally:
+        outra.close()
 
 
 def test_chat_endpoint_saudacao(cliente_api):
