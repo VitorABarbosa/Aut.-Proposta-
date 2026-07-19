@@ -173,6 +173,20 @@ def rota_listar_propostas(cliente: str):
     return {"propostas": propostas}
 
 
+class CorpoChat(BaseModel):
+    mensagens: list[dict] = []
+
+
+@app.post("/chat", dependencies=[Depends(verificar_token)])
+def rota_chat(corpo: CorpoChat):
+    from app.ia.chat import responder
+    conn = _abrir_conn()
+    try:
+        return responder(conn, corpo.mensagens)
+    finally:
+        _fechar_conn(conn)
+
+
 @app.delete("/propostas/{proposta_id}", dependencies=[Depends(verificar_token)])
 def rota_deletar_proposta(proposta_id: int):
     conn = _abrir_conn()

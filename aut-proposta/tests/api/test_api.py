@@ -259,3 +259,9 @@ def test_deletar_proposta_inexistente_404(cliente_api):
 def test_deletar_proposta_sem_auth_401(cliente_api):
     r = cliente_api.delete("/propostas/1")
     assert r.status_code == 401
+
+
+def test_chat_endpoint_saudacao(cliente_api):
+    r = cliente_api.post("/chat", json={"mensagens": []}, headers=HEAD)
+    assert r.status_code == 200
+    assert "Oi, tudo bem?" in r.json()["mensagem"]
