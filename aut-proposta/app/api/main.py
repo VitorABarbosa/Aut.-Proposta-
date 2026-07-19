@@ -1,0 +1,106 @@
+"""API HTTP do serviço de propostas (consumida pelo hub flyingstudio-tools).
+
+Auth simples de serviço interno: Bearer token fixo comparado com API_TOKEN.
+Sem API_TOKEN no ambiente as rotas protegidas devolvem 503 — nunca abrem.
+"""
+from __future__ import annotations
+
+import hmac
+import os
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, model_validator
+
+from app.db.conexao import get_conn
+from app.ia.parser import parse
+from app.servicos.proposta import gerar, levantar
+
+app = FastAPI(title="Automação de Proposta — Flying Studio")
+
+MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _dir_saida() -> Path:
+    return Path(os.getenv("PROPOSTAS_DIR", "saidas"))
+
+
+# Indireção para os testes injetarem a conexão do fixture db.
+def _abrir_conn():
+    return get_conn()
+
+
+def _fechar_conn(conn) -> None:
+    conn.close()
+
+
+def verificar_token(request: Request) -> None:
+    esperado = os.getenv("API_TOKEN")
+    if not esperado:
+        raise HTTPException(503, "API_TOKEN não configurado")
+    recebido = request.headers.get("Authorization", "")
+    if not hmac.compare_digest(recebido, f"Bearer {esperado}"):
+        raise HTTPException(401, "Token inválido")
+
+
+class CorpoLevantamento(BaseModel):
+    texto: str
+
+
+class CorpoProposta(BaseModel):
+    texto: str | None = None
+    estrutura: dict | None = None
+
+    @model_validator(mode="after")
+    def _um_dos_dois(self):
+        if self.texto is None and self.estrutura is None:
+            raise ValueError("Envie 'texto' ou 'estrutura'.")
+        return self
+
+
+@app.get("/saude")
+def saude():
+    return {"ok": True}
+
+
+@app.post("/levantamento", dependencies=[Depends(verificar_token)])
+def rota_levantamento(corpo: CorpoLevantamento):
+    estrutura = parse(corpo.texto)
+    conn = _abrir_conn()
+    try:
+        lev = levantar(conn, estrutura)
+    finally:
+        _fechar_conn(conn)
+    return {
+        "estrutura": estrutura,
+        "fechado": lev["fechado"],
+        "estrategia_usada": lev["estrategia_usada"],
+        "avisos": lev["avisos"],
+    }
+
+
+@app.post("/propostas", dependencies=[Depends(verificar_token)])
+def rota_gerar(corpo: CorpoProposta):
+    estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
+    conn = _abrir_conn()
+    try:
+        out = gerar(conn, estrutura, _dir_saida())
+    finally:
+        _fechar_conn(conn)
+    return {
+        "proposta_id": out["proposta_id"],
+        "docx_url": out["docx_url"],
+        "download": f"/propostas/{out['proposta_id']}/docx",
+        "fechado": out["fechado"],
+        "avisos": out["avisos"],
+    }
+
+
+@app.get("/propostas/{proposta_id}/docx", dependencies=[Depends(verificar_token)])
+def rota_download(proposta_id: int):
+    caminho = _dir_saida() / f"proposta_{proposta_id}.docx"
+    if not caminho.exists():
+        raise HTTPException(404, "Proposta não encontrada")
+    return FileResponse(caminho, media_type=MIME_DOCX,
+                        filename=f"proposta_{proposta_id}.docx")
