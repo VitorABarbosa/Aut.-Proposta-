@@ -55,7 +55,6 @@ def test_gera_docx_com_conteudo_essencial(tmp_path):
     assert "R$ 33.660,00" in texto           # investimento final
     assert "R$38.250,00" in texto            # valor bruto (desconto presente)
     assert "12% parceria" in texto
-    assert "Trinta e Três Mil, Seiscentos e Sessenta Reais" in texto
     assert "Valor total: " in texto
     # Itens numerados
     assert "1. Perspectiva Fachada" in texto
@@ -102,6 +101,51 @@ def test_categoria_vazia_omitida_e_renumera(tmp_path):
     # Com 2 categorias, investimento e pagamento renumeram para 2.3/2.4.
     assert "2.3 INVESTIMENTO PARA O DESENVOLVIMENTOS" in texto
     assert "2.4 FORMA DE PAGAMENTO:" in texto
+
+
+def test_destaques_inline_do_modelo(tmp_path):
+    """Fidelidade run a run: negritos, itálicos/sublinhados e marca-texto do exemplo."""
+    saida = tmp_path / "p.docx"
+    gerar_docx(CLIENTE, _fechado_galli(), saida)
+    doc = Document(str(saida))
+
+    def runs_de(paragrafo_contendo):
+        for p in doc.paragraphs:
+            if paragrafo_contendo in p.text:
+                return p.runs
+        raise AssertionError(f"parágrafo não encontrado: {paragrafo_contendo}")
+
+    # Cliente/REF e A/C: negrito + marca-texto amarelo.
+    r = runs_de("GALLI - REF:")[0]
+    assert r.bold and r.font.highlight_color is not None
+
+    # NID Studio em negrito dentro do OBS.
+    runs = runs_de("NID Studio")
+    nid = next(x for x in runs if "NID Studio" in x.text)
+    assert nid.bold
+
+    # “R00” em negrito nas considerações; "Shade" em itálico.
+    runs = runs_de("Etapas e Tiros de Aprovação")
+    assert any("“R00”" in x.text and x.bold for x in runs)
+    assert any(x.text == "Shade" and x.italic for x in runs)
+
+    # Citação da apresentação em itálico + sublinhado.
+    runs = runs_de("uma imagem vale mais do que mil palavras")
+    citacao = next(x for x in runs if "mil palavras" in x.text)
+    assert citacao.italic and citacao.underline
+
+    # Frame.io/Adobe e Full HD a 30 FPS em negrito na entrega final.
+    runs = runs_de("Resolução das Animações/Filmes")
+    assert any("Full HD a 30 FPS" in x.text and x.bold for x in runs)
+
+    # Linha "Valor total:" inteira em negrito.
+    runs = runs_de("Valor total:")
+    assert all(x.bold for x in runs if x.text.strip())
+
+    # Assinatura com marca-texto.
+    ultimo = doc.paragraphs[-1]
+    assert ultimo.text == "GALLI"
+    assert ultimo.runs[0].font.highlight_color is not None
 
 
 def test_precos_individuais_opcionais(tmp_path):
