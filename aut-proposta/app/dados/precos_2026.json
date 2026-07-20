@@ -1,0 +1,69 @@
+{"padrao": {"categorias": [
+  {"nome": "externas", "ordem": 1, "rotulo": "Ilustrações Externas", "prefixo": "Perspectiva ",
+   "default": 1900, "descricao_padrao": "Perspectiva Externa Diversa", "itens": [
+    {"chave": "fachada", "descricao": "Perspectiva Fachada / Fotomontagem / Voo", "preco": 3000, "padroes": ["fachada", "portaria", "fotomontagem(?! ?/? ?com foto ?drone)", "voo(?!\\s+de\\s+passaro)"]},
+    {"chave": "fotomontagem_drone", "descricao": "Fotomontagem com FotoDrone (por conta da Flying)", "preco": 4500, "padroes": ["foto ?drone", "fotomontagem com drone"]},
+    {"chave": "voo_passaro", "descricao": "Perspectiva Voo de Pássaro", "preco": 2500, "padroes": ["voo de passaro", "passaro"]},
+    {"chave": "externa_diversa", "descricao": "Perspectiva Externa Diversa", "preco": 1900, "padroes": ["externa", "playground", "piscina", "quadra", "terraco", "praça", "praca"]}]},
+  {"nome": "internas", "ordem": 2, "rotulo": "Ilustrações Internas", "prefixo": "Perspectiva ",
+   "default": 1750, "descricao_padrao": "Perspectiva Interna Diversa", "itens": [
+    {"chave": "interna_diversa", "descricao": "Perspectiva Interna Diversa", "preco": 1750, "padroes": ["interna", "academia", "salao", "salão", "coworking", "lavanderia", "market", "cozinha", "dormitorio", "dormitório"]}]},
+  {"nome": "plantas", "ordem": 3, "rotulo": "Plantas Humanizadas 2D", "prefixo": "Planta Humanizada ",
+   "default": 1200, "descricao_padrao": "Planta Humanizada Tipo", "itens": [
+    {"chave": "planta_pavimentos", "descricao": "Planta Humanizada Pavimentos (Térreo, Rooftop, Estacionamento)", "preco": 3000, "padroes": ["implanta", "pavimento", "terreo", "térreo", "rooftop", "estacionamento", "subsolo"]},
+    {"chave": "planta_isometrica", "descricao": "Planta Tipo Isométrica 3D", "preco": 1900, "padroes": ["isometrica", "isométrica", "planta.*3d"]},
+    {"chave": "planta_tipo", "descricao": "Planta Humanizada Tipo", "preco": 1200, "padroes": ["tipo", "planta"]}]},
+  {"nome": "filmes", "ordem": 4, "rotulo": "Filmes e Takes 3D", "prefixo": "",
+   "default": 15000, "descricao_padrao": "Filme 3D — 60 segundos", "itens": [
+    {"chave": "filme_3d_60s", "descricao": "Filme 3D — 60 segundos", "preco": 15000, "padroes": ["filme"]},
+    {"chave": "takes_7s", "descricao": "Take 3D de até 7 segundos", "preco": 1300, "padroes": ["take"]}]},
+  {"nome": "tour_virtual", "ordem": 5, "rotulo": "Tour Virtual / VR 360", "prefixo": "",
+   "default": 1200, "descricao_padrao": "Tour Virtual 360 — Render por ambiente", "itens": [
+    {"chave": "tour_elaboracao", "descricao": "Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", "preco": 2500, "padroes": ["elabora"]},
+    {"chave": "tour_render", "descricao": "Tour Virtual / VR 360 Multiplataforma — Render, por ambiente", "preco": 1200, "padroes": ["render"]},
+    {"chave": "tour_web", "descricao": "Tour Virtual / VR 360 Multiplataforma — Web/Mobile/PC, por ambiente", "preco": 450, "padroes": ["web", "mobile", "publica"]}]},
+  {"nome": "drone", "ordem": 6, "rotulo": "Drone e Fotografia Aérea", "prefixo": "",
+   "default": 2200, "descricao_padrao": "Fotografia Aérea Drone — para Fotomontagem", "itens": [
+    {"chave": "foto_aerea", "descricao": "Fotografia Aérea Drone — para Fotomontagem", "preco": 2200, "padroes": ["fotografia", "aerea", "aérea"]},
+    {"chave": "voo_drone_hora", "descricao": "Voo de Drone — por hora, por endereço (SP)", "preco": 1800, "padroes": ["voo de drone", "hora"]}]},
+  {"nome": "estudos", "ordem": 7, "rotulo": "Estudos de Fachada", "prefixo": "",
+   "default": 18000, "descricao_padrao": "Estudo de Fachada / Cromático", "itens": [
+    {"chave": "estudo_fachada", "descricao": "Estudo de Fachada / Cromático de Fachada", "preco": 18000, "padroes": ["estudo", "cromatico", "cromático"]}]},
+  {"nome": "tecnologia", "ordem": 8, "rotulo": "Tecnologias Interativas", "prefixo": "",
+   "default": 22800, "descricao_padrao": "Desenvolvimento de Aplicação Web para Tela Touch", "itens": [
+    {"chave": "app_web_touch", "descricao": "Desenvolvimento de Aplicação Web — para Tela Touch", "preco": 22800, "padroes": ["aplicativo", "aplicacao", "aplicação", "app", "touch"]},
+    {"chave": "explorador_dbrave", "descricao": "Explorador D.Brave", "preco": 39000, "padroes": ["explorador", "d\\.?brave"]}]}
+]},
+ "mcmv": {"categorias": [
+  {"nome": "externas", "ordem": 1, "rotulo": "Ilustrações Externas", "prefixo": "Perspectiva ",
+   "default": 1850, "descricao_padrao": "Perspectiva Externa Diversa", "itens": [
+    {"chave": "fotomontagem_interno", "descricao": "Fotomontagem — com projeto interno", "preco": 3500, "padroes": ["fotomontagem.*interno"]},
+    {"chave": "fotomontagem_externo", "descricao": "Fotomontagem — com projeto externo", "preco": 4500, "padroes": ["fotomontagem"]},
+    {"chave": "fachada", "descricao": "Perspectiva Fachada / Portaria", "preco": 2800, "padroes": ["fachada", "portaria"]},
+    {"chave": "voo_passaro", "descricao": "Perspectiva Voo de Pássaro", "preco": 1900, "padroes": ["voo de passaro", "passaro"]},
+    {"chave": "externa_diversa", "descricao": "Perspectiva Externa Diversa", "preco": 1850, "padroes": ["externa", "playground", "piscina", "quadra"]}]},
+  {"nome": "internas", "ordem": 2, "rotulo": "Ilustrações Internas", "prefixo": "Perspectiva ",
+   "default": 1500, "descricao_padrao": "Perspectiva Interna Diversa", "itens": [
+    {"chave": "interna_diversa", "descricao": "Perspectiva Interna Diversa", "preco": 1500, "padroes": ["interna", "academia", "salao", "salão", "cozinha"]}]},
+  {"nome": "plantas", "ordem": 3, "rotulo": "Plantas Humanizadas 2D", "prefixo": "Planta Humanizada ",
+   "default": 900, "descricao_padrao": "Planta Humanizada Tipo", "itens": [
+    {"chave": "planta_pavimentos", "descricao": "Planta Pavimentos (Térreo, Rooftop, Estacionamento)", "preco": 2000, "padroes": ["implanta", "pavimento", "terreo", "térreo", "rooftop", "subsolo"]},
+    {"chave": "planta_isometrica", "descricao": "Planta Tipo Isométrica 3D", "preco": 1850, "padroes": ["isometrica", "isométrica", "planta.*3d"]},
+    {"chave": "planta_tipo", "descricao": "Planta Tipo", "preco": 900, "padroes": ["tipo", "planta"]}]},
+  {"nome": "filmes", "ordem": 4, "rotulo": "Filmes e Takes 3D", "prefixo": "",
+   "default": 11500, "descricao_padrao": "Filme 3D — 60 segundos", "itens": [
+    {"chave": "filme_3d_60s", "descricao": "Filme 3D — 60 segundos", "preco": 11500, "padroes": ["filme"]},
+    {"chave": "takes", "descricao": "Takes", "preco": 1250, "padroes": ["take"]}]},
+  {"nome": "tour_virtual", "ordem": 5, "rotulo": "Tour Virtual / VR 360", "prefixo": "",
+   "default": 1200, "descricao_padrao": "Tour Virtual 360 — Render por ambiente", "itens": [
+    {"chave": "tour_elaboracao", "descricao": "Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", "preco": 2500, "padroes": ["elabora"]},
+    {"chave": "tour_render", "descricao": "Tour Virtual / VR 360 Multiplataforma — Render, por ambiente", "preco": 1200, "padroes": ["render"]},
+    {"chave": "tour_web", "descricao": "Tour Virtual / VR 360 Multiplataforma — Web/Mobile/PC, por ambiente", "preco": 450, "padroes": ["web", "mobile"]}]},
+  {"nome": "drone", "ordem": 6, "rotulo": "Drone e Fotografia Aérea", "prefixo": "",
+   "default": 2100, "descricao_padrao": "Fotografia Aérea — para Fotomontagem", "itens": [
+    {"chave": "foto_aerea", "descricao": "Fotografia Aérea — para Fotomontagem", "preco": 2100, "padroes": ["fotografia", "aerea", "aérea"]},
+    {"chave": "voo_drone_hora", "descricao": "Voo de Drone — por hora, por endereço (SP)", "preco": 2100, "padroes": ["voo de drone", "hora"]}]},
+  {"nome": "estudos", "ordem": 7, "rotulo": "Estudos de Fachada", "prefixo": "",
+   "default": 11500, "descricao_padrao": "Estudo de Fachada / Cromático", "itens": [
+    {"chave": "estudo_fachada", "descricao": "Estudo de Fachada / Cromático de Fachada", "preco": 11500, "padroes": ["estudo", "cromatico", "cromático"]}]}
+]}}

@@ -121,3 +121,58 @@ def test_cliente_string_vira_objeto():
     assert est["cliente"] == {"empresa": "GALLI", "ref": "", "contato": ""}
     assert est["externas"] == [] and est["desconto_pct"] == 0
     assert est["estrategia"] == "planilha" and est["_avisos"] == []
+
+
+def test_schema_estrutura_contem_categorias_dinamicas():
+    schema = chat._schema_estrutura(["externas", "internas", "plantas", "filmes", "tecnologia"])
+    assert schema["properties"]["filmes"] == {
+        "type": "array", "items": {"type": "string"},
+        "description": "Descrições dos itens da categoria 'filmes', uma entrada por unidade.",
+    }
+    assert "tecnologia" in schema["properties"]
+    assert schema["properties"]["tabela_precos"]["enum"] == ["padrao", "mcmv"]
+    assert schema["additionalProperties"] is False
+
+
+def test_completar_estrutura_preserva_tabela_precos_mcmv():
+    est = chat._completar_estrutura({"cliente": "GALLI", "tabela_precos": "mcmv"})
+    assert est["tabela_precos"] == "mcmv"
+
+
+def test_completar_estrutura_tabela_precos_invalida_vira_padrao():
+    est = chat._completar_estrutura({"cliente": "GALLI", "tabela_precos": "bitcoin"})
+    assert est["tabela_precos"] == "padrao"
+
+
+def test_completar_estrutura_categorias_dinamicas():
+    est = chat._completar_estrutura({"filmes": ["Filme institucional"]}, ["filmes", "tecnologia"])
+    assert est["filmes"] == ["Filme institucional"]
+    assert est["tecnologia"] == []
+    assert "externas" not in est
+
+
+def test_montar_system_prompt_traz_catalogo_e_regra_rigidez(db):
+    aplicar_schema(db)
+    semear_precos(db)
+    from app.db.repo_precos import carregar_tabela_precos
+    tabela = carregar_tabela_precos(db)
+    prompt = chat._montar_system_prompt(tabela)
+    assert "REGRA DE RIGIDEZ" in prompt
+    assert "Tecnologias Interativas" in prompt
+    assert "MCMV" in prompt
+    # Sem preços no catálogo injetado no prompt.
+    assert "22800" not in prompt and "R$" not in prompt
+
+
+def test_listar_para_ia_nao_expoe_docx_url(db, monkeypatch):
+    """O bucket é privado: a IA não recebe docx_url (links são pela aba Histórico)."""
+    monkeypatch.setattr(chat, "listar_propostas",
+                        lambda conn, cliente: [{"id": 1, "cliente": "GALLI",
+                                                "referencia": "Aurora", "data": "2026-07-19",
+                                                "total": 3000.0,
+                                                "docx_url": "https://r2/privado.docx"}])
+    resultado, lev = chat._executar_ferramenta(db, "listar_propostas_cliente",
+                                               {"cliente": "GALLI"})
+    assert lev is None
+    assert "docx_url" not in resultado and "r2/privado" not in resultado
+    assert "GALLI" in resultado

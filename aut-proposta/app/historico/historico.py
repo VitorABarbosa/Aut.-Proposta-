@@ -1,6 +1,8 @@
 """Histórico de propostas por cliente, lido do banco.
 
 Calcula o 'preço do último projeto do mesmo cliente' — base do 2º levantamento.
+As categorias consideradas são derivadas dos dados da própria proposta
+histórica (dinâmicas — não uma lista fixa).
 """
 from __future__ import annotations
 
@@ -8,8 +10,6 @@ import psycopg
 
 from app.db.repo_propostas import ultima_proposta_estruturada
 from app.dominio.texto import normalizar
-
-CATEGORIAS = ("externas", "internas", "plantas")
 
 
 class Historico:
@@ -37,9 +37,8 @@ class Historico:
         if not ult:
             return None
         out: dict[str, float] = {}
-        for cat in CATEGORIAS:
-            bloco = ult.get(cat)
-            if bloco and bloco["qtd"]:
+        for cat, bloco in ult.items():
+            if isinstance(bloco, dict) and bloco.get("qtd"):
                 out[cat] = bloco["total"] / bloco["qtd"]
         return out
 
@@ -47,8 +46,9 @@ class Historico:
         ult = self._ultima(nome)
         if not ult:
             return None
-        tabela: dict[str, dict[str, int]] = {cat: {} for cat in CATEGORIAS}
-        for cat in CATEGORIAS:
-            for it in ult.get(cat, {}).get("itens", []):
-                tabela[cat][normalizar(it["desc"])] = it["preco"]
+        tabela: dict[str, dict[str, int]] = {}
+        for cat, bloco in ult.items():
+            if not isinstance(bloco, dict) or "itens" not in bloco:
+                continue
+            tabela[cat] = {normalizar(it["desc"]): it["preco"] for it in bloco["itens"]}
         return tabela

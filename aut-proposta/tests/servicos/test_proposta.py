@@ -29,6 +29,22 @@ def _prep(db):
     semear_precos(db)
 
 
+def test_parse_texto_passa_categorias_do_catalogo_ao_parser(db, monkeypatch):
+    _prep(db)
+    recebido = {}
+
+    def _parse_fake(texto, categorias=None):
+        recebido["texto"] = texto
+        recebido["categorias"] = categorias
+        return {"cliente": {"empresa": "GALLI"}}
+
+    monkeypatch.setattr("app.ia.parser.parse", _parse_fake)
+    out = svc.parse_texto(db, "Cliente: GALLI\nFilmes: Filme institucional")
+    assert out["cliente"]["empresa"] == "GALLI"
+    assert "filmes" in recebido["categorias"]
+    assert "tecnologia" in recebido["categorias"]
+
+
 def test_levantar_planilha_precos_do_banco(db):
     _prep(db)
     out = svc.levantar(db, _estrutura())
@@ -36,6 +52,33 @@ def test_levantar_planilha_precos_do_banco(db):
     assert out["estrategia_usada"] == "planilha"
     assert orc["externas"]["itens"][0]["preco"] == 3000  # fachada, preço do NEON
     assert orc["total_imagens"] == 3
+    assert out["tabela_precos"] == "padrao"
+
+
+def test_levantar_devolve_tabela_precos_padrao_por_default(db):
+    _prep(db)
+    out = svc.levantar(db, _estrutura())
+    assert out["tabela_precos"] == "padrao"
+
+
+def test_levantar_mcmv_precifica_interna_1500(db):
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "mcmv"
+    est["externas"] = []
+    est["internas"] = ["Academia"]
+    est["plantas"] = []
+    out = svc.levantar(db, est)
+    assert out["tabela_precos"] == "mcmv"
+    assert out["fechado"]["orcamento"]["internas"]["itens"][0]["preco"] == 1500
+
+
+def test_levantar_tabela_precos_invalida_levanta_erro(db):
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "inexistente"
+    with pytest.raises(ValueError):
+        svc.levantar(db, est)
 
 
 def test_levantar_com_desconto(db):
@@ -144,3 +187,15 @@ def test_gerar_usa_chave_organizada_por_cliente_projeto(db, tmp_path, monkeypatc
     esperado = f"Propostas/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
     assert chaves == [esperado]
     assert out["chave_r2"] == esperado
+
+
+def test_categoria_fora_da_tabela_gera_aviso(db):
+    """Item de categoria inexistente na tabela escolhida (ex.: tecnologia no
+    mcmv) não pode sumir em silêncio — vira aviso."""
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "mcmv"
+    est["tecnologia"] = ["Aplicativo touch para o stand"]
+    out = svc.levantar(db, est)
+    assert any("tecnologia" in a and "mcmv" in a for a in out["avisos"])
+    assert any("1 item(ns) não precificado" in a for a in out["avisos"])

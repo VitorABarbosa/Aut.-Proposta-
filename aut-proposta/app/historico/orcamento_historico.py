@@ -2,11 +2,11 @@
 
 Ordem de resolução de preço por item: item exato no histórico → item similar
 (substring) → média da categoria do cliente → preço de planilha (fallback).
+As categorias percorridas são as da tabela de preços atual (dinâmicas).
 """
 from __future__ import annotations
 
 from app.dominio.orcamento import (
-    CATEGORIAS,
     CategoriaOrcada,
     ItemOrcado,
     Orcamento,
@@ -29,9 +29,11 @@ def orcar_pelo_historico(
     tab_cliente = historico.tabela_precos_inferida(cliente) or {}
     medias = historico.medias_por_categoria(cliente) or {}
 
-    cats: dict[str, CategoriaOrcada] = {c: CategoriaOrcada(nome=c) for c in CATEGORIAS}
+    cats: dict[str, CategoriaOrcada] = {
+        c: CategoriaOrcada(nome=c, rotulo=tabela.meta(c)["rotulo"]) for c in tabela.categorias()
+    }
 
-    for cat in CATEGORIAS:
+    for cat in tabela.categorias():
         for desc in descricoes.get(cat, []):
             chave = normalizar(desc)
             preco: int | None = None
@@ -60,15 +62,10 @@ def orcar_pelo_historico(
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
-                    descricao_normalizada=_formata_descricao(desc, cat),
+                    descricao_normalizada=_formata_descricao(desc, cat, tabela),
                     preco=preco,
                     fonte=fonte,
                 )
             )
 
-    return Orcamento(
-        estrategia=f"historico:{cliente}",
-        externas=cats["externas"],
-        internas=cats["internas"],
-        plantas=cats["plantas"],
-    )
+    return Orcamento(estrategia=f"historico:{cliente}", categorias=cats)

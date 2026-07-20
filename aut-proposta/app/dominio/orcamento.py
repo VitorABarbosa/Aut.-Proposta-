@@ -1,7 +1,9 @@
 """Levantamento de orçamento pela tabela padrão (planilha).
 
 Classifica cada descrição, aplica o preço da tabela e formata a descrição no
-padrão de escrita do Flying Studio. Soma por categoria e no total.
+padrão de escrita do Flying Studio. Soma por categoria e no total. As
+categorias são dinâmicas — vêm de `TabelaPrecos.categorias()` (NEON), na
+ordem de `ordem` do catálogo.
 """
 from __future__ import annotations
 
@@ -12,17 +14,8 @@ from app.dominio.descontos import Desconto, aplicar_desconto
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
 
-CATEGORIAS = ("externas", "internas", "plantas")
-PREFIXOS = {
-    "externas": "Perspectiva ",
-    "internas": "Perspectiva ",
-    "plantas": "Planta Humanizada ",
-}
-_PREFIXOS_JA_ESCRITOS = {
-    "externas": ("perspectiva", "estudo de fachada", "estudo cromatic"),
-    "internas": ("perspectiva",),
-    "plantas": ("planta",),
-}
+# Fallback só para compat de leitura antiga (sem conn/tabela disponível).
+CATEGORIAS_FALLBACK = ("externas", "internas", "plantas")
 
 
 @dataclass
@@ -43,6 +36,7 @@ class ItemOrcado:
 @dataclass
 class CategoriaOrcada:
     nome: str
+    rotulo: str = ""
     itens: list[ItemOrcado] = field(default_factory=list)
 
     @property
@@ -65,40 +59,45 @@ class CategoriaOrcada:
 @dataclass
 class Orcamento:
     estrategia: str
-    externas: CategoriaOrcada
-    internas: CategoriaOrcada
-    plantas: CategoriaOrcada
+    categorias: dict[str, CategoriaOrcada] = field(default_factory=dict)
 
     @property
     def subtotal(self) -> int:
-        return self.externas.total + self.internas.total + self.plantas.total
+        return sum(cat.total for cat in self.categorias.values())
 
     @property
     def total_imagens(self) -> int:
-        return self.externas.qtd + self.internas.qtd + self.plantas.qtd
+        return sum(cat.qtd for cat in self.categorias.values())
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "estrategia": self.estrategia,
             "subtotal": self.subtotal,
             "total_imagens": self.total_imagens,
-            "externas": self.externas.to_dict(),
-            "internas": self.internas.to_dict(),
-            "plantas": self.plantas.to_dict(),
         }
+        for nome, cat in self.categorias.items():
+            out[nome] = cat.to_dict()
+        out["_categorias"] = [
+            {"nome": nome, "rotulo": cat.rotulo} for nome, cat in self.categorias.items()
+        ]
+        return out
 
 
-def _formata_descricao(desc_usuario: str, categoria: str) -> str:
+def _formata_descricao(desc_usuario: str, categoria: str, tabela: TabelaPrecos) -> str:
     """Aplica o jeito de escrever do Flying Studio.
 
-    Se o usuário já começou com 'Perspectiva'/'Planta'/etc., mantém (só sobe a
-    inicial). Senão, prefixa com o padrão da categoria.
+    Se o usuário já começou com a 1ª palavra do prefixo da categoria (ex.:
+    'Perspectiva', 'Planta'), mantém (só sobe a inicial). Senão, prefixa com
+    o prefixo do catálogo (`tabela.meta(categoria)["prefixo"]`; "" se a
+    categoria não tiver prefixo).
     """
     desc = desc_usuario.strip()
     norm = normalizar(desc)
-    if any(norm.startswith(p) for p in _PREFIXOS_JA_ESCRITOS.get(categoria, ())):
+    prefixo = tabela.meta(categoria)["prefixo"]
+    primeira_palavra = normalizar(prefixo).split()[0] if prefixo.strip() else None
+    if primeira_palavra and norm.startswith(primeira_palavra):
         return desc[:1].upper() + desc[1:] if desc else desc
-    return PREFIXOS[categoria] + desc
+    return prefixo + desc
 
 
 def orcar_pela_planilha(
@@ -106,26 +105,23 @@ def orcar_pela_planilha(
     tabela: TabelaPrecos | None = None,
 ) -> Orcamento:
     tabela = tabela or TabelaPrecos()
-    cats: dict[str, CategoriaOrcada] = {c: CategoriaOrcada(nome=c) for c in CATEGORIAS}
+    cats: dict[str, CategoriaOrcada] = {
+        c: CategoriaOrcada(nome=c, rotulo=tabela.meta(c)["rotulo"]) for c in tabela.categorias()
+    }
 
-    for cat in CATEGORIAS:
+    for cat in tabela.categorias():
         for desc in descricoes.get(cat, []):
             classif = tabela.classificar(desc, cat)
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
-                    descricao_normalizada=_formata_descricao(desc, cat),
+                    descricao_normalizada=_formata_descricao(desc, cat, tabela),
                     preco=classif["preco"],
                     fonte=f"planilha:{classif['chave']}",
                 )
             )
 
-    return Orcamento(
-        estrategia="planilha",
-        externas=cats["externas"],
-        internas=cats["internas"],
-        plantas=cats["plantas"],
-    )
+    return Orcamento(estrategia="planilha", categorias=cats)
 
 
 def fechar_orcamento(orcamento: Orcamento, desconto: "Desconto | None" = None) -> dict[str, Any]:

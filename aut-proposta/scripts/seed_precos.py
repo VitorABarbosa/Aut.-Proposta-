@@ -2,6 +2,10 @@
 
 Uso avulso (produção): defina DATABASE_URL e rode `python -m scripts.seed_precos`.
 O JSON é apenas o insumo do seed — em runtime a fonte da verdade é o banco.
+
+Semeia as DUAS tabelas de preços (padrao + mcmv) definidas em
+`app/dados/precos_2026.json`, com metadados de catálogo por categoria
+(ordem, rótulo do docx, prefixo de descrição).
 """
 from __future__ import annotations
 
@@ -12,8 +16,7 @@ import psycopg
 
 from app.db.conexao import get_conn
 
-JSON_PATH = Path(__file__).resolve().parent.parent / "app" / "dados" / "precos_planilha.json"
-CATEGORIAS = ("externas", "internas", "plantas")
+JSON_PATH = Path(__file__).resolve().parent.parent / "app" / "dados" / "precos_2026.json"
 
 
 def semear_precos(conn: psycopg.Connection) -> dict[str, int]:
@@ -24,22 +27,38 @@ def semear_precos(conn: psycopg.Connection) -> dict[str, int]:
     n_item = 0
     with conn.transaction(), conn.cursor() as cur:
         cur.execute("TRUNCATE preco_item, preco_categoria RESTART IDENTITY CASCADE")
-        for cat in CATEGORIAS:
-            bloco = dados[cat]
-            cur.execute(
-                "INSERT INTO preco_categoria (categoria, preco_default, descricao_padrao) "
-                "VALUES (%s, %s, %s)",
-                (cat, bloco["_default"], bloco["_descricao_padrao"]),
-            )
-            n_cat += 1
-            for ordem, linha in enumerate(bloco["tabela"]):
+        for tabela_nome, bloco_tabela in dados.items():
+            for categoria in bloco_tabela["categorias"]:
                 cur.execute(
-                    "INSERT INTO preco_item (categoria, chave, descricao, preco, padroes, ordem) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (cat, linha["chave"], linha["descricao"], linha["preco"],
-                     linha["padroes"], ordem),
+                    "INSERT INTO preco_categoria "
+                    "(tabela, categoria, ordem, rotulo_docx, prefixo, preco_default, descricao_padrao) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        tabela_nome,
+                        categoria["nome"],
+                        categoria["ordem"],
+                        categoria["rotulo"],
+                        categoria["prefixo"],
+                        categoria["default"],
+                        categoria["descricao_padrao"],
+                    ),
                 )
-                n_item += 1
+                n_cat += 1
+                for ordem, linha in enumerate(categoria["itens"]):
+                    cur.execute(
+                        "INSERT INTO preco_item (tabela, categoria, chave, descricao, preco, padroes, ordem) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (
+                            tabela_nome,
+                            categoria["nome"],
+                            linha["chave"],
+                            linha["descricao"],
+                            linha["preco"],
+                            linha["padroes"],
+                            ordem,
+                        ),
+                    )
+                    n_item += 1
     return {"categorias": n_cat, "itens": n_item}
 
 
