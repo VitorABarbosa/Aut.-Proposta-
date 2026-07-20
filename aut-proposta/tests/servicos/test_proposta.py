@@ -187,3 +187,15 @@ def test_gerar_usa_chave_organizada_por_cliente_projeto(db, tmp_path, monkeypatc
     esperado = f"Propostas/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
     assert chaves == [esperado]
     assert out["chave_r2"] == esperado
+
+
+def test_categoria_fora_da_tabela_gera_aviso(db):
+    """Item de categoria inexistente na tabela escolhida (ex.: tecnologia no
+    mcmv) não pode sumir em silêncio — vira aviso."""
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "mcmv"
+    est["tecnologia"] = ["Aplicativo touch para o stand"]
+    out = svc.levantar(db, est)
+    assert any("tecnologia" in a and "mcmv" in a for a in out["avisos"])
+    assert any("1 item(ns) não precificado" in a for a in out["avisos"])

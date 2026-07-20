@@ -54,6 +54,15 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
 
     tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
     descricoes = _descricoes(estrutura, tabela.categorias())
+    # Itens de categorias fora da tabela escolhida (ex.: tecnologia no mcmv)
+    # não podem evaporar sem sinal — o usuário decide trocar de tabela ou remover.
+    for cat, itens in estrutura.items():
+        if (cat not in tabela.categorias() and isinstance(itens, list) and itens
+                and not cat.startswith("_")):
+            avisos.append(
+                f"Categoria '{cat}' não existe na tabela {tabela_precos} — "
+                f"{len(itens)} item(ns) não precificado(s)."
+            )
     empresa = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
 
