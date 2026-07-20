@@ -280,13 +280,19 @@ def gerar_docx(
     # ===== 2 – Itens / Investimentos =====
     _titulo_secao(doc, "2", "ITENS A SEREM DESENVOLVIDOS / INVESTIMENTOS:")
 
+    categorias_meta = orc.get("_categorias")
+    if categorias_meta:
+        categorias = [(c["nome"], c["rotulo"]) for c in categorias_meta]
+    else:
+        categorias = [(cat, ROTULOS_CATEGORIA[cat]) for cat in ("externas", "internas", "plantas")]
+
     sub = 0
-    for cat in ("externas", "internas", "plantas"):
-        bloco = orc[cat]
-        if not bloco["qtd"]:
+    for cat, rotulo in categorias:
+        bloco = orc.get(cat)
+        if not bloco or not bloco["qtd"]:
             continue
         sub += 1
-        _subtitulo(doc, f"2.{sub} {ROTULOS_CATEGORIA[cat]}")
+        _subtitulo(doc, f"2.{sub} {rotulo}")
         for idx, item in enumerate(bloco["itens"], start=1):
             p = _par(doc, depois=2, recuo=1.25)
             texto = f"{idx}. {item['descricao']}"

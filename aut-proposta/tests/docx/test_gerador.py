@@ -103,6 +103,64 @@ def test_categoria_vazia_omitida_e_renumera(tmp_path):
     assert "2.4 FORMA DE PAGAMENTO:" in texto
 
 
+def test_categorias_dinamicas_via_categorias_meta(tmp_path):
+    """Com `_categorias` do catálogo 2026, seções 2.N seguem a ordem do banco e
+    categorias extras (filmes/tecnologia) aparecem com subtítulo próprio,
+    renumerando investimento/pagamento."""
+    fechado = _fechado_galli()
+    orc = fechado["orcamento"]
+    orc["filmes"] = {"nome": "filmes", "qtd": 1, "total": 15000,
+                      "itens": [{"descricao": "Filme institucional 60 segundos",
+                                 "preco": 15000, "fonte": "planilha:filme_3d_60s"}]}
+    orc["tecnologia"] = {"nome": "tecnologia", "qtd": 1, "total": 22800,
+                          "itens": [{"descricao": "Aplicação Web Touch", "preco": 22800,
+                                     "fonte": "planilha:app_web_touch"}]}
+    orc["_categorias"] = [
+        {"nome": "externas", "rotulo": "Ilustrações Externas"},
+        {"nome": "internas", "rotulo": "Ilustrações Internas"},
+        {"nome": "plantas", "rotulo": "Plantas Humanizadas 2D"},
+        {"nome": "filmes", "rotulo": "Filmes e Takes 3D"},
+        {"nome": "tour_virtual", "rotulo": "Tour Virtual / VR 360"},
+        {"nome": "drone", "rotulo": "Drone e Fotografia Aérea"},
+        {"nome": "estudos", "rotulo": "Estudos de Fachada"},
+        {"nome": "tecnologia", "rotulo": "Tecnologias Interativas"},
+    ]
+    saida = tmp_path / "p.docx"
+    gerar_docx(CLIENTE, fechado, saida)
+    texto = _texto_completo(saida)
+
+    assert "2.1 Ilustrações Externas" in texto
+    assert "2.2 Ilustrações Internas" in texto
+    assert "2.3 Plantas Humanizadas 2D" in texto
+    assert "2.4 Filmes e Takes 3D" in texto
+    assert "2.5 Tecnologias Interativas" in texto
+    # Categorias sem itens (tour_virtual/drone/estudos) não geram subtítulo.
+    assert "Tour Virtual / VR 360" not in texto
+    assert "Drone e Fotografia Aérea" not in texto
+    assert "Estudos de Fachada" not in texto
+    assert "Filme institucional 60 segundos" in texto
+    assert "Aplicação Web Touch" in texto
+    # Investimento e forma de pagamento renumeram para 2.6/2.7.
+    assert "2.6 INVESTIMENTO PARA O DESENVOLVIMENTOS" in texto
+    assert "2.7 FORMA DE PAGAMENTO:" in texto
+
+
+def test_categorias_meta_ausente_usa_fallback_fixo(tmp_path):
+    """Propostas antigas re-geradas sem `_categorias` mantêm as 3 categorias fixas
+    com os rótulos atuais (comportamento anterior à Task 3)."""
+    fechado = _fechado_galli()
+    assert "_categorias" not in fechado["orcamento"]
+    saida = tmp_path / "p.docx"
+    gerar_docx(CLIENTE, fechado, saida)
+    texto = _texto_completo(saida)
+
+    assert "2.1 Ilustrações Externas" in texto
+    assert "2.2 Ilustrações Internas" in texto
+    assert "2.3 Plantas Humanizadas 2D" in texto
+    assert "2.4 INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:" in texto
+    assert "2.5 FORMA DE PAGAMENTO:" in texto
+
+
 def test_destaques_inline_do_modelo(tmp_path):
     """Fidelidade run a run: negritos, itálicos/sublinhados e marca-texto do exemplo."""
     saida = tmp_path / "p.docx"
