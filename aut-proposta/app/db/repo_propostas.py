@@ -84,3 +84,65 @@ def atualizar_docx_url(conn: psycopg.Connection, proposta_id: int, docx_url: str
                 "UPDATE propostas SET docx_url = %s WHERE id = %s",
                 (docx_url, proposta_id),
             )
+
+
+def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> dict | None:
+    """Reconstrói a estrutura (shape do parser) para copiar/reprecificar."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct "
+            "FROM propostas p JOIN clientes c ON c.id = p.cliente_id WHERE p.id = %s",
+            (proposta_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        nome, contato, referencia, desconto_pct = row
+
+        listas: dict[str, list[str]] = {cat: [] for cat in CATEGORIAS}
+        cur.execute(
+            "SELECT categoria, descricao FROM proposta_itens "
+            "WHERE proposta_id = %s ORDER BY id",
+            (proposta_id,),
+        )
+        for categoria, descricao in cur.fetchall():
+            if categoria in listas:
+                listas[categoria].append(descricao)
+
+    return {
+        "cliente": {"empresa": nome, "ref": referencia or "", "contato": contato or ""},
+        **listas,
+        "desconto_pct": float(desconto_pct),
+        "desconto_label": None,
+        "estrategia": "planilha",
+        "mostrar_precos_individuais": False,
+        "_avisos": [],
+    }
+
+
+def excluir_proposta(conn: psycopg.Connection, proposta_id: int) -> bool:
+    """Apaga a proposta e seus itens (cascade). True se existia."""
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM propostas WHERE id = %s", (proposta_id,))
+            return cur.rowcount > 0
+
+
+def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> list[dict]:
+    """Lista propostas (mais recente primeiro), com filtro opcional por cliente."""
+    sql = (
+        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url "
+        "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
+    )
+    params: tuple = ()
+    if cliente:
+        sql += "WHERE c.nome_norm = %s "
+        params = (normalizar(cliente),)
+    sql += "ORDER BY p.id DESC"
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return [
+            {"id": i, "cliente": nome, "referencia": ref,
+             "data": data.isoformat(), "total": float(total), "docx_url": url}
+            for i, nome, ref, data, total, url in cur.fetchall()
+        ]

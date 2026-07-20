@@ -15,9 +15,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from app.db.conexao import get_conn
+from app.db.repo_propostas import excluir_proposta, listar_propostas
 from app.docx.pdf import converter_para_pdf
 from app.ia.parser import parse
 from app.servicos.proposta import gerar, levantar
+from app.storage.r2 import excluir_objetos
 
 app = FastAPI(title="Automação de Proposta — Flying Studio")
 
@@ -159,3 +161,64 @@ def rota_download_pdf(proposta_id: int):
         pdf = pdf_gerado
     return FileResponse(pdf, media_type="application/pdf",
                         filename=f"proposta_{proposta_id}.pdf")
+
+
+@app.get("/propostas", dependencies=[Depends(verificar_token)])
+def rota_listar_propostas(cliente: str | None = None):
+    conn = _abrir_conn()
+    try:
+        propostas = listar_propostas(conn, cliente)
+    finally:
+        _fechar_conn(conn)
+    for p in propostas:
+        p["download"] = f"/propostas/{p['id']}/docx"
+        p["pdf"] = f"/propostas/{p['id']}/pdf"
+    return {"propostas": propostas}
+
+
+class CorpoChat(BaseModel):
+    mensagens: list[dict] = []
+
+
+@app.post("/chat", dependencies=[Depends(verificar_token)])
+def rota_chat(corpo: CorpoChat):
+    from app.ia.chat import responder
+    conn = _abrir_conn()
+    try:
+        return responder(conn, corpo.mensagens)
+    finally:
+        _fechar_conn(conn)
+
+
+def _chaves_r2_da_proposta(docx_url: str | None, proposta_id: int) -> list[str]:
+    if docx_url and "/Propostas/" in docx_url:
+        chave = "Propostas/" + docx_url.split("/Propostas/", 1)[1]
+    else:
+        chave = f"propostas/proposta_{proposta_id}.docx"  # padrão legado
+    return [chave]
+
+
+@app.delete("/propostas/{proposta_id}", dependencies=[Depends(verificar_token)])
+def rota_deletar_proposta(proposta_id: int):
+    conn = _abrir_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT docx_url FROM propostas WHERE id = %s", (proposta_id,))
+            row = cur.fetchone()
+        docx_url = row[0] if row else None
+        if row is None or not excluir_proposta(conn, proposta_id):
+            raise HTTPException(404, "Proposta não encontrada")
+        # Os SELECTs acima abrem transação implícita na conexão, o que rebaixa
+        # o conn.transaction() de excluir_proposta a SAVEPOINT — sem este
+        # commit, o close() da conexão descartaria a exclusão (mesmo bug de
+        # app/servicos/proposta.py:gerar).
+        conn.commit()
+    finally:
+        _fechar_conn(conn)
+
+    excluir_objetos(_chaves_r2_da_proposta(docx_url, proposta_id))
+    for ext in (".docx", ".pdf"):
+        arq = _dir_saida() / f"proposta_{proposta_id}{ext}"
+        if arq.exists():
+            arq.unlink()
+    return {"excluida": proposta_id}

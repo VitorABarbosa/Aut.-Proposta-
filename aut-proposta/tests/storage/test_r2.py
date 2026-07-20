@@ -79,3 +79,24 @@ def test_falha_de_upload_devolve_none(monkeypatch, tmp_path):
     arq = tmp_path / "p.docx"
     arq.write_bytes(b"x")
     assert r2.enviar_docx(arq, "propostas/p.docx") is None
+
+
+def test_excluir_objetos_chama_delete(monkeypatch, tmp_path):
+    _limpa_envs(monkeypatch)
+    for k, v in ENVS.items():
+        monkeypatch.setenv(k, v)
+    apagadas = []
+
+    class FakeS3:
+        def delete_object(self, Bucket, Key):
+            apagadas.append((Bucket, Key))
+
+    monkeypatch.setattr(r2, "_cliente_s3", lambda: FakeS3())
+    n = r2.excluir_objetos(["Propostas/galli/aurora/proposta_1.docx"])
+    assert n == 1
+    assert apagadas == [("propostas", "Propostas/galli/aurora/proposta_1.docx")]
+
+
+def test_excluir_sem_credenciais_devolve_zero(monkeypatch):
+    _limpa_envs(monkeypatch)
+    assert r2.excluir_objetos(["x"]) == 0
