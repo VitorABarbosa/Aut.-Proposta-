@@ -29,6 +29,22 @@ def _prep(db):
     semear_precos(db)
 
 
+def test_parse_texto_passa_categorias_do_catalogo_ao_parser(db, monkeypatch):
+    _prep(db)
+    recebido = {}
+
+    def _parse_fake(texto, categorias=None):
+        recebido["texto"] = texto
+        recebido["categorias"] = categorias
+        return {"cliente": {"empresa": "GALLI"}}
+
+    monkeypatch.setattr("app.ia.parser.parse", _parse_fake)
+    out = svc.parse_texto(db, "Cliente: GALLI\nFilmes: Filme institucional")
+    assert out["cliente"]["empresa"] == "GALLI"
+    assert "filmes" in recebido["categorias"]
+    assert "tecnologia" in recebido["categorias"]
+
+
 def test_levantar_planilha_precos_do_banco(db):
     _prep(db)
     out = svc.levantar(db, _estrutura())

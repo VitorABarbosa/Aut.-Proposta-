@@ -43,7 +43,7 @@ def test_parse_local_vazio_avisa():
 
 
 def test_parse_usa_openai_quando_disponivel(monkeypatch):
-    monkeypatch.setattr(parser, "_chamar_openai", lambda texto: {
+    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None: {
         "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
         "externas": ["Fachada"], "internas": [], "plantas": [],
         "desconto_pct": 10, "estrategia": "planilha",
@@ -57,7 +57,7 @@ def test_parse_usa_openai_quando_disponivel(monkeypatch):
 
 
 def test_parse_cai_para_local_quando_openai_falha(monkeypatch):
-    def _explode(texto):
+    def _explode(texto, categorias=None):
         raise RuntimeError("api fora")
     monkeypatch.setattr(parser, "_chamar_openai", _explode)
     out = parser.parse(TEXTO_EXEMPLO)
@@ -68,7 +68,7 @@ def test_parse_cai_para_local_quando_openai_falha(monkeypatch):
 
 def test_parse_openai_complementado_pelo_local(monkeypatch):
     # Modelo devolveu só externas; local completa internas/plantas.
-    monkeypatch.setattr(parser, "_chamar_openai", lambda texto: {
+    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None: {
         "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "—"},
         "externas": ["Fachada vista da calçada"], "internas": [], "plantas": [],
     })
@@ -91,6 +91,15 @@ def test_parse_local_filtra_metadata_em_linha_unica():
     assert out["plantas"] == ["Apartamento Tipo"]
     assert out["desconto_pct"] == 10.0
     assert out["estrategia"] == "planilha"
+
+
+def test_parse_local_reconhece_cabecalho_filmes_com_categorias_extras():
+    texto = "Cliente: GALLI\nFilmes: Filme institucional 60s\nTour Virtual: Render sala"
+    out = parser.parse_local(
+        texto, categorias=["externas", "internas", "plantas", "filmes", "tour_virtual"]
+    )
+    assert out["filmes"] == ["Filme institucional 60s"]
+    assert out["tour_virtual"] == ["Render sala"]
 
 
 def test_parse_local_filtra_metadata_historico_sem_acento_multilinha():

@@ -24,6 +24,15 @@ from app.storage.r2 import enviar_docx
 TABELAS_VALIDAS = ("padrao", "mcmv")
 
 
+def parse_texto(conn: psycopg.Connection, texto: str) -> dict[str, Any]:
+    """Converte texto livre em estrutura, usando as categorias ativas do
+    catálogo padrão (o `texto` não indica ainda qual tabela_precos usar)."""
+    from app.ia.parser import parse
+
+    tabela = carregar_tabela_precos(conn)
+    return parse(texto, categorias=tabela.categorias())
+
+
 def _slug(texto: str) -> str:
     """Normaliza e converte espaços em hífens para slug de chave R2."""
     return normalizar(texto).replace(" ", "-")

@@ -13,7 +13,9 @@ from typing import Any
 
 import psycopg
 
+from app.db.repo_precos import carregar_tabela_precos
 from app.db.repo_propostas import listar_propostas, obter_estrutura_de_proposta
+from app.dominio.precos import TabelaPrecos
 from app.servicos.proposta import levantar
 
 SAUDACAO = "Oi, tudo bem? O que vamos fazer hoje?"
@@ -22,18 +24,32 @@ MSG_SEM_IA = ("O chat precisa da IA e ela está indisponível agora — "
               "use a aba 'Texto direto', que funciona sem internet da IA.")
 MAX_RODADAS = 5
 
-SYSTEM_PROMPT = """Você é o assistente de propostas da Flying Studio. Tom descontraído,
+TABELAS_PRECOS = ("padrao", "mcmv")
+
+_BASE_PROMPT = """Você é o assistente de propostas da Flying Studio. Tom descontraído,
 direto e simpático, em português. Conduza a conversa para montar uma proposta:
 precisa de construtora/incorporadora (cliente), empreendimento (ref), A/C (quem
-recebe) e os itens (externas/internas/plantas). O usuário pode mandar tudo de uma
-vez ou aos poucos — pergunte SÓ o que faltar, uma coisa por vez.
+recebe) e os itens — organizados pelas categorias do CATÁLOGO OFICIAL abaixo.
+O usuário pode mandar tudo de uma vez ou aos poucos — pergunte SÓ o que faltar,
+uma coisa por vez.
+
+{catalogo}
+
+REGRA DE RIGIDEZ: se o pedido não casar claramente com um item do catálogo
+acima, NÃO classifique por palpite. Pergunte ao usuário qual item corresponde,
+citando 2-3 candidatos do catálogo. Um serviço que não é imagem NUNCA entra
+como ilustração externa/interna.
+
+MCMV: se o usuário indicar que o empreendimento é Minha Casa Minha Vida
+(MCMV/faixa/raiz), use tabela_precos='mcmv'. Na dúvida, pergunte.
 
 REGRAS INEGOCIÁVEIS:
 - Você NUNCA inventa nem calcula preço/valor. Todo número vem das ferramentas.
 - Para precificar (mesmo parcial), chame precificar_proposta com a estrutura no
-  formato: cliente = {empresa, ref, contato}; externas/internas/plantas = listas
-  de descrições de itens (uma string por unidade, repita a descrição se houver
-  mais de uma unidade igual).
+  formato: cliente = {{empresa, ref, contato}}; cada categoria do catálogo
+  (nome entre parênteses acima, ex.: externas/internas/plantas/filmes/...) =
+  lista de descrições de itens (uma string por unidade, repita a descrição se
+  houver mais de uma unidade igual).
 - Para consultar propostas antigas de um cliente, chame listar_propostas_cliente.
 - Para copiar uma proposta mudando algo, chame carregar_proposta, ajuste a
   estrutura conforme o pedido e chame precificar_proposta.
@@ -47,10 +63,28 @@ FORMATO DAS RESPOSTAS:
   oriente: "é só baixar na aba Histórico".
 """
 
-_ESTRUTURA_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
+# Mantido para compatibilidade/inspeção (catálogo vazio — prompt real é
+# montado por `_montar_system_prompt` com o catálogo carregado do banco).
+SYSTEM_PROMPT = _BASE_PROMPT.format(catalogo="CATÁLOGO OFICIAL (única fonte de classificação):")
+
+
+def _montar_system_prompt(tabela: TabelaPrecos) -> str:
+    """Injeta o catálogo oficial (rótulo + descrições, SEM preços) no prompt."""
+    linhas = []
+    for cat in tabela.categorias():
+        meta = tabela.meta(cat)
+        itens = tabela.dados[cat].get("tabela", [])
+        descricoes = "; ".join(item["descricao"] for item in itens)
+        linhas.append(f"- {meta['rotulo']} ({cat}): {descricoes}")
+    catalogo = "CATÁLOGO OFICIAL (única fonte de classificação):\n" + "\n".join(linhas)
+    return _BASE_PROMPT.format(catalogo=catalogo)
+
+
+def _schema_estrutura(categorias: list[str]) -> dict:
+    """Gera o JSON Schema da ferramenta precificar_proposta para as
+    categorias ativas do catálogo (uma propriedade array-de-string por
+    categoria) + tabela_precos (padrao|mcmv)."""
+    properties: dict[str, Any] = {
         "cliente": {
             "type": "object",
             "description": "Dados do cliente da proposta.",
@@ -61,46 +95,52 @@ _ESTRUTURA_SCHEMA = {
             },
             "required": ["empresa"],
         },
-        "externas": {
+    }
+    for cat in categorias:
+        properties[cat] = {
             "type": "array", "items": {"type": "string"},
-            "description": "Descrições das imagens externas (ex.: 'Perspectiva Fachada'), "
-                           "uma entrada por unidade.",
-        },
-        "internas": {
-            "type": "array", "items": {"type": "string"},
-            "description": "Descrições das imagens internas, uma entrada por unidade.",
-        },
-        "plantas": {
-            "type": "array", "items": {"type": "string"},
-            "description": "Descrições das plantas humanizadas, uma entrada por unidade.",
-        },
-        "desconto_pct": {"type": "number", "description": "Percentual de desconto (0 se não houver)"},
-        "desconto_label": {"type": ["string", "null"], "description": "Rótulo do desconto, se houver"},
-        "estrategia": {"type": "string", "enum": ["planilha", "historico"],
-                       "description": "Fonte de preços a usar"},
-    },
-    "required": ["cliente"],
-}
+            "description": f"Descrições dos itens da categoria '{cat}', uma entrada por unidade.",
+        }
+    properties["desconto_pct"] = {"type": "number", "description": "Percentual de desconto (0 se não houver)"}
+    properties["desconto_label"] = {"type": ["string", "null"], "description": "Rótulo do desconto, se houver"}
+    properties["estrategia"] = {"type": "string", "enum": ["planilha", "historico"],
+                                 "description": "Fonte de preços a usar"}
+    properties["tabela_precos"] = {"type": "string", "enum": list(TABELAS_PRECOS),
+                                    "description": "Tabela de preços: 'padrao' ou 'mcmv' "
+                                                   "(Minha Casa Minha Vida)."}
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": ["cliente"],
+    }
 
-FERRAMENTAS = [
-    {"type": "function", "function": {
-        "name": "precificar_proposta",
-        "description": "Precifica a estrutura da proposta (preços oficiais/histórico). "
-                       "Devolve valores, totais e pendências obrigatórias.",
-        "parameters": {"type": "object", "properties": {"estrutura": _ESTRUTURA_SCHEMA},
-                       "required": ["estrutura"]}}},
-    {"type": "function", "function": {
-        "name": "listar_propostas_cliente",
-        "description": "Lista as propostas já feitas para um cliente (id, projeto, data, total).",
-        "parameters": {"type": "object", "properties": {"cliente": {"type": "string"}},
-                       "required": ["cliente"]}}},
-    {"type": "function", "function": {
-        "name": "carregar_proposta",
-        "description": "Carrega a estrutura completa de uma proposta antiga pelo id, "
-                       "para copiar/ajustar e depois precificar.",
-        "parameters": {"type": "object", "properties": {"proposta_id": {"type": "integer"}},
-                       "required": ["proposta_id"]}}},
-]
+
+def _ferramentas(categorias: list[str]) -> list[dict]:
+    return [
+        {"type": "function", "function": {
+            "name": "precificar_proposta",
+            "description": "Precifica a estrutura da proposta (preços oficiais/histórico). "
+                           "Devolve valores, totais e pendências obrigatórias.",
+            "parameters": {"type": "object", "properties": {"estrutura": _schema_estrutura(categorias)},
+                           "required": ["estrutura"]}}},
+        {"type": "function", "function": {
+            "name": "listar_propostas_cliente",
+            "description": "Lista as propostas já feitas para um cliente (id, projeto, data, total).",
+            "parameters": {"type": "object", "properties": {"cliente": {"type": "string"}},
+                           "required": ["cliente"]}}},
+        {"type": "function", "function": {
+            "name": "carregar_proposta",
+            "description": "Carrega a estrutura completa de uma proposta antiga pelo id, "
+                           "para copiar/ajustar e depois precificar.",
+            "parameters": {"type": "object", "properties": {"proposta_id": {"type": "integer"}},
+                           "required": ["proposta_id"]}}},
+    ]
+
+
+# Mantido para compatibilidade/inspeção — schema/ferramentas reais são
+# montados por request em `responder`, com as categorias do catálogo carregado.
+FERRAMENTAS = _ferramentas([])
 
 
 def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
@@ -116,15 +156,20 @@ def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
     return resp.choices[0].message
 
 
-def _completar_estrutura(bruto: dict) -> dict:
+_CATEGORIAS_FALLBACK = ("externas", "internas", "plantas")
+
+
+def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> dict:
     """Rede de segurança: completa a estrutura mandada pelo modelo com defaults,
     tolerando formatos levemente errados (ex.: cliente como string solta)."""
+    categorias = list(categorias) if categorias is not None else list(_CATEGORIAS_FALLBACK)
     bruto = bruto or {}
     estrutura = {
         "cliente": {"empresa": "CLIENTE", "ref": "", "contato": ""},
-        "externas": [], "internas": [], "plantas": [],
+        **{cat: [] for cat in categorias},
         "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
         "mostrar_precos_individuais": False, "_avisos": [],
+        "tabela_precos": "padrao",
     }
     for chave, valor in bruto.items():
         estrutura[chave] = valor
@@ -140,19 +185,23 @@ def _completar_estrutura(bruto: dict) -> dict:
                    "contato": cliente.get("contato") or ""}
     estrutura["cliente"] = cliente
 
-    for chave in ("externas", "internas", "plantas"):
+    for chave in categorias:
         itens = estrutura.get(chave)
         if not isinstance(itens, list):
             itens = []
         estrutura[chave] = [str(item) for item in itens]
 
+    if estrutura.get("tabela_precos") not in TABELAS_PRECOS:
+        estrutura["tabela_precos"] = "padrao"
+
     return estrutura
 
 
-def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict) -> tuple[str, dict | None]:
+def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict,
+                          categorias: list[str] | None = None) -> tuple[str, dict | None]:
     """Devolve (resultado_json_para_a_ia, levantamento_ou_None)."""
     if nome == "precificar_proposta":
-        estrutura = _completar_estrutura(args.get("estrutura"))
+        estrutura = _completar_estrutura(args.get("estrutura"), categorias)
         lev = levantar(conn, estrutura)
         from app.api.main import _pendencias  # mesma regra de pendências da API
         lev_out = {
@@ -188,11 +237,19 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
     if not os.getenv("OPENAI_API_KEY"):
         return {"mensagem": MSG_SEM_IA, "quick_replies": [], "levantamento": None}
 
-    llm: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(mensagens)
+    # Catálogo carregado 1x por request, fora do try/except abaixo (que só
+    # cobre a conversa com o modelo): falha de banco deve propagar como nas
+    # outras rotas, não virar MSG_SEM_IA silenciosamente.
+    tabela = carregar_tabela_precos(conn)
+    categorias = tabela.categorias()
+    system_prompt = _montar_system_prompt(tabela)
+    ferramentas = _ferramentas(categorias)
+
+    llm: list[dict] = [{"role": "system", "content": system_prompt}] + list(mensagens)
     levantamento: dict | None = None
     try:
         for _ in range(MAX_RODADAS):
-            msg = _chamar_modelo(llm, FERRAMENTAS)
+            msg = _chamar_modelo(llm, ferramentas)
             if not getattr(msg, "tool_calls", None):
                 return {"mensagem": msg.content or "", "quick_replies": [],
                         "levantamento": levantamento}
@@ -207,7 +264,7 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
                 # rodada; só falha de _chamar_modelo derruba para MSG_SEM_IA.
                 try:
                     resultado, lev = _executar_ferramenta(
-                        conn, tc.function.name, json.loads(tc.function.arguments))
+                        conn, tc.function.name, json.loads(tc.function.arguments), categorias)
                 except Exception as exc:  # noqa: BLE001
                     resultado, lev = json.dumps(
                         {"erro": f"argumentos inválidos para {tc.function.name}: "

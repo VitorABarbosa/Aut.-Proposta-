@@ -11,7 +11,9 @@ import os
 import re
 from typing import Any
 
-SECOES_CABEC = {
+CATEGORIAS_FALLBACK = ("externas", "internas", "plantas")
+
+_SECOES_CABEC_ESPECIAIS = {
     "externas": [r"externas?", r"ilustra(?:c|ç)(?:o|õ)es externas", r"perspectivas externas",
                  r"imagens externas", r"\bext\b"],
     "internas": [r"internas?", r"ilustra(?:c|ç)(?:o|õ)es internas", r"perspectivas internas",
@@ -19,6 +21,28 @@ SECOES_CABEC = {
     "plantas": [r"plantas?", r"plantas? humanizadas?", r"plantas? baixas?",
                 r"implanta(?:c|ç)(?:o|õ)es?"],
 }
+
+
+def _secoes_cabec(categorias: list[str] | tuple[str, ...]) -> dict[str, list[str]]:
+    """Gera os padrões de cabeçalho de seção por categoria.
+
+    Para as 3 categorias históricas mantém os sinônimos já existentes; para
+    categorias novas (vindas do catálogo dinâmico), usa o nome da categoria
+    aceitando espaço no lugar de "_" (ex.: "tour_virtual" reconhece
+    "Tour Virtual:").
+    """
+    secoes: dict[str, list[str]] = {}
+    for cat in categorias:
+        if cat in _SECOES_CABEC_ESPECIAIS:
+            secoes[cat] = list(_SECOES_CABEC_ESPECIAIS[cat])
+        else:
+            nome_espaco = cat.replace("_", " ")
+            secoes[cat] = [rf"{re.escape(nome_espaco)}s?"]
+    return secoes
+
+
+# Mantido para compatibilidade/inspeção: padrões das 3 categorias históricas.
+SECOES_CABEC = _secoes_cabec(CATEGORIAS_FALLBACK)
 
 _RE_CLIENTE = re.compile(r"(?:^|\n|[,;.])\s*(?:cliente|empresa)\s*[:\-]?\s+([^\n,;.]+?)(?=$|\n|[,;]|\.\s|\s+(?:ref|projeto|empreendimento|a/?c|contato|aos\s+cuidados))", re.I)
 _RE_REF = re.compile(r"(?:^|\n|[,;.\-–—])\s*(?:ref(?:er[eê]ncia)?|projeto|empreendimento)\s*[:\-]?\s+([^\n,;.]+?)(?=$|\n|[,;]|\.\s|\s+(?:cliente|empresa|a/?c|contato|aos\s+cuidados|\d+\s*%))", re.I)
@@ -43,9 +67,11 @@ def _limpa_item(s: str) -> str:
     return s.strip()
 
 
-def _split_secoes(texto: str) -> dict[str, str]:
+def _split_secoes(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, str]:
+    categorias = list(categorias) if categorias is not None else list(CATEGORIAS_FALLBACK)
+    secoes_cabec = _secoes_cabec(categorias)
     matches: list[tuple[int, str, re.Match]] = []
-    for cat, padroes in SECOES_CABEC.items():
+    for cat, padroes in secoes_cabec.items():
         for pad in padroes:
             for m in re.finditer(rf"(?:^|\n|[\.;])\s*({pad})\s*[:\-]", texto, re.I):
                 matches.append((m.start(), cat, m))
@@ -74,7 +100,8 @@ def _extrai_lista(bloco: str) -> list[str]:
     return items
 
 
-def parse_local(texto: str) -> dict[str, Any]:
+def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
+    categorias = list(categorias) if categorias is not None else list(CATEGORIAS_FALLBACK)
     avisos: list[str] = []
     if not texto.strip():
         avisos.append("Texto vazio.")
@@ -123,12 +150,10 @@ def parse_local(texto: str) -> dict[str, Any]:
     elif _RE_ESTRATEGIA_HIST.search(texto):
         estrategia = "historico"
 
-    blocos = _split_secoes(texto)
-    externas = _extrai_lista(blocos.get("externas", ""))
-    internas = _extrai_lista(blocos.get("internas", ""))
-    plantas = _extrai_lista(blocos.get("plantas", ""))
+    blocos = _split_secoes(texto, categorias)
+    listas = {cat: _extrai_lista(blocos.get(cat, "")) for cat in categorias}
 
-    if texto.strip() and not (externas or internas or plantas):
+    if texto.strip() and not any(listas.values()):
         avisos.append("Não consegui identificar nenhuma seção (Externas/Internas/Plantas). "
                       "Use cabeçalhos tipo 'Externas:' seguidos de uma lista.")
 
@@ -138,9 +163,7 @@ def parse_local(texto: str) -> dict[str, Any]:
             "ref": ref or "PROJETO",
             "contato": contato or "—",
         },
-        "externas": externas,
-        "internas": internas,
-        "plantas": plantas,
+        **listas,
         "desconto_pct": desconto_pct,
         "desconto_label": None,
         "estrategia": estrategia,
@@ -150,21 +173,25 @@ def parse_local(texto: str) -> dict[str, Any]:
     }
 
 
-SYSTEM_PROMPT = """Você é um assistente que converte descrições livres em português de
+def _system_prompt(categorias: list[str] | tuple[str, ...]) -> str:
+    linhas_schema = ",\n".join(f'  "{cat}": ["nome do item", ...]' for cat in categorias)
+    categorias_txt = ", ".join(categorias)
+    return f"""Você é um assistente que converte descrições livres em português de
 propostas comerciais da Flying Studio em JSON estruturado. Devolva APENAS JSON válido,
 sem markdown, sem texto extra.
 
 Schema:
-{
-  "cliente": {"empresa": "...", "ref": "...", "contato": "..."},
-  "externas": ["nome do ambiente", ...],
-  "internas": ["nome do ambiente", ...],
-  "plantas":  ["nome", ...],
+{{
+  "cliente": {{"empresa": "...", "ref": "...", "contato": "..."}},
+{linhas_schema},
   "desconto_pct": 0,
   "desconto_label": null,
   "estrategia": "auto" | "planilha" | "historico",
   "mostrar_precos_individuais": false
-}
+}}
+
+Categorias ativas do catálogo: {categorias_txt}. Use SOMENTE essas chaves de
+categoria (além de cliente/desconto/estrategia) — não invente outras.
 
 Regras importantes:
 - Se o usuário mencionou explicitamente "preço de planilha" ou "tabela padrão",
@@ -181,11 +208,16 @@ Regras importantes:
 """
 
 
-def _chamar_openai(texto: str) -> dict[str, Any] | None:
+# Mantido para compatibilidade: prompt com as 3 categorias históricas.
+SYSTEM_PROMPT = _system_prompt(CATEGORIAS_FALLBACK)
+
+
+def _chamar_openai(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
     """Chamada crua ao modelo. Devolve None sem OPENAI_API_KEY; propaga exceções."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return None
+    categorias = list(categorias) if categorias is not None else list(CATEGORIAS_FALLBACK)
     from openai import OpenAI
 
     client = OpenAI(api_key=api_key)
@@ -195,14 +227,15 @@ def _chamar_openai(texto: str) -> dict[str, Any] | None:
         response_format={"type": "json_object"},
         temperature=0,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _system_prompt(categorias)},
             {"role": "user", "content": texto},
         ],
     )
     return json.loads(resp.choices[0].message.content or "{}")
 
 
-def _preencher_defaults(data: dict[str, Any]) -> dict[str, Any]:
+def _preencher_defaults(data: dict[str, Any], categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
+    categorias = list(categorias) if categorias is not None else list(CATEGORIAS_FALLBACK)
     data.setdefault("_avisos", [])
     data.setdefault("desconto_label", None)
     data.setdefault("mostrar_precos_individuais", False)
@@ -211,36 +244,41 @@ def _preencher_defaults(data: dict[str, Any]) -> dict[str, Any]:
     cli.setdefault("empresa", "CLIENTE")
     cli.setdefault("ref", "PROJETO")
     cli.setdefault("contato", "—")
-    for k in ("externas", "internas", "plantas"):
+    for k in categorias:
         data.setdefault(k, [])
     data.setdefault("desconto_pct", 0)
     return data
 
 
-def parse(texto: str) -> dict[str, Any]:
-    """Tenta OpenAI; em falta de chave ou falha, usa o parser local."""
+def parse(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Tenta OpenAI; em falta de chave ou falha, usa o parser local.
+
+    `categorias` são as categorias ativas do catálogo (`TabelaPrecos.categorias()`);
+    sem elas, cai no fallback histórico (externas/internas/plantas).
+    """
+    categorias = list(categorias) if categorias is not None else list(CATEGORIAS_FALLBACK)
     texto = (texto or "").strip()
     if not texto:
-        return parse_local("")
+        return parse_local("", categorias)
 
     aviso_falha = None
     try:
-        bruto = _chamar_openai(texto)
+        bruto = _chamar_openai(texto, categorias)
     except Exception as exc:  # noqa: BLE001 — qualquer falha da API cai no local
         bruto = None
         aviso_falha = f"OpenAI indisponível, usando parser local. ({exc})"
 
     if bruto is not None:
-        data = _preencher_defaults(bruto)
+        data = _preencher_defaults(bruto, categorias)
         data["_origem"] = "openai"
         # Complementa lacunas com o parser local (o modelo às vezes omite seções).
-        local = parse_local(texto)
-        for k in ("externas", "internas", "plantas"):
-            if not data[k] and local[k]:
+        local = parse_local(texto, categorias)
+        for k in categorias:
+            if not data.get(k) and local.get(k):
                 data[k] = local[k]
         return data
 
-    out = parse_local(texto)
+    out = parse_local(texto, categorias)
     if aviso_falha:
         out["_avisos"].insert(0, aviso_falha)
     return out
