@@ -30,7 +30,10 @@ vez ou aos poucos — pergunte SÓ o que faltar, uma coisa por vez.
 
 REGRAS INEGOCIÁVEIS:
 - Você NUNCA inventa nem calcula preço/valor. Todo número vem das ferramentas.
-- Para precificar (mesmo parcial), chame precificar_proposta com a estrutura.
+- Para precificar (mesmo parcial), chame precificar_proposta com a estrutura no
+  formato: cliente = {empresa, ref, contato}; externas/internas/plantas = listas
+  de descrições de itens (uma string por unidade, repita a descrição se houver
+  mais de uma unidade igual).
 - Para consultar propostas antigas de um cliente, chame listar_propostas_cliente.
 - Para copiar uma proposta mudando algo, chame carregar_proposta, ajuste a
   estrutura conforme o pedido e chame precificar_proposta.
@@ -38,12 +41,47 @@ REGRAS INEGOCIÁVEIS:
   foi atualizado; se não houver pendências, diga que é só clicar em Gerar.
 """
 
+_ESTRUTURA_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "cliente": {
+            "type": "object",
+            "description": "Dados do cliente da proposta.",
+            "properties": {
+                "empresa": {"type": "string", "description": "Construtora/incorporadora"},
+                "ref": {"type": "string", "description": "Empreendimento/referência"},
+                "contato": {"type": "string", "description": "A/C — quem recebe"},
+            },
+            "required": ["empresa"],
+        },
+        "externas": {
+            "type": "array", "items": {"type": "string"},
+            "description": "Descrições das imagens externas (ex.: 'Perspectiva Fachada'), "
+                           "uma entrada por unidade.",
+        },
+        "internas": {
+            "type": "array", "items": {"type": "string"},
+            "description": "Descrições das imagens internas, uma entrada por unidade.",
+        },
+        "plantas": {
+            "type": "array", "items": {"type": "string"},
+            "description": "Descrições das plantas humanizadas, uma entrada por unidade.",
+        },
+        "desconto_pct": {"type": "number", "description": "Percentual de desconto (0 se não houver)"},
+        "desconto_label": {"type": ["string", "null"], "description": "Rótulo do desconto, se houver"},
+        "estrategia": {"type": "string", "enum": ["planilha", "historico"],
+                       "description": "Fonte de preços a usar"},
+    },
+    "required": ["cliente"],
+}
+
 FERRAMENTAS = [
     {"type": "function", "function": {
         "name": "precificar_proposta",
         "description": "Precifica a estrutura da proposta (preços oficiais/histórico). "
                        "Devolve valores, totais e pendências obrigatórias.",
-        "parameters": {"type": "object", "properties": {"estrutura": {"type": "object"}},
+        "parameters": {"type": "object", "properties": {"estrutura": _ESTRUTURA_SCHEMA},
                        "required": ["estrutura"]}}},
     {"type": "function", "function": {
         "name": "listar_propostas_cliente",
@@ -72,17 +110,51 @@ def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
     return resp.choices[0].message
 
 
+def _completar_estrutura(bruto: dict) -> dict:
+    """Rede de segurança: completa a estrutura mandada pelo modelo com defaults,
+    tolerando formatos levemente errados (ex.: cliente como string solta)."""
+    bruto = bruto or {}
+    estrutura = {
+        "cliente": {"empresa": "CLIENTE", "ref": "", "contato": ""},
+        "externas": [], "internas": [], "plantas": [],
+        "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    for chave, valor in bruto.items():
+        estrutura[chave] = valor
+
+    cliente = estrutura.get("cliente")
+    if isinstance(cliente, str):
+        cliente = {"empresa": cliente, "ref": "", "contato": ""}
+    elif not isinstance(cliente, dict):
+        cliente = {"empresa": "CLIENTE", "ref": "", "contato": ""}
+    else:
+        cliente = {"empresa": cliente.get("empresa") or "CLIENTE",
+                   "ref": cliente.get("ref") or "",
+                   "contato": cliente.get("contato") or ""}
+    estrutura["cliente"] = cliente
+
+    for chave in ("externas", "internas", "plantas"):
+        itens = estrutura.get(chave)
+        if not isinstance(itens, list):
+            itens = []
+        estrutura[chave] = [str(item) for item in itens]
+
+    return estrutura
+
+
 def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict) -> tuple[str, dict | None]:
     """Devolve (resultado_json_para_a_ia, levantamento_ou_None)."""
     if nome == "precificar_proposta":
-        lev = levantar(conn, args["estrutura"])
+        estrutura = _completar_estrutura(args.get("estrutura"))
+        lev = levantar(conn, estrutura)
         from app.api.main import _pendencias  # mesma regra de pendências da API
         lev_out = {
-            "estrutura": args["estrutura"],
+            "estrutura": estrutura,
             "fechado": lev["fechado"],
             "estrategia_usada": lev["estrategia_usada"],
             "avisos": lev["avisos"],
-            "pendencias": _pendencias(args["estrutura"], lev["fechado"]),
+            "pendencias": _pendencias(estrutura, lev["fechado"]),
         }
         resumo = {
             "subtotal": lev["fechado"]["financeiro"]["subtotal"],
@@ -121,8 +193,16 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
                                           "arguments": tc.function.arguments}}
                             for tc in msg.tool_calls]})
             for tc in msg.tool_calls:
-                resultado, lev = _executar_ferramenta(
-                    conn, tc.function.name, json.loads(tc.function.arguments))
+                # Erro de ferramenta volta para a IA se corrigir na próxima
+                # rodada; só falha de _chamar_modelo derruba para MSG_SEM_IA.
+                try:
+                    resultado, lev = _executar_ferramenta(
+                        conn, tc.function.name, json.loads(tc.function.arguments))
+                except Exception as exc:  # noqa: BLE001
+                    resultado, lev = json.dumps(
+                        {"erro": f"argumentos inválidos para {tc.function.name}: "
+                                 f"{exc}. Corrija e tente de novo."},
+                        ensure_ascii=False), None
                 if lev is not None:
                     levantamento = lev
                 llm.append({"role": "tool", "tool_call_id": tc.id, "content": resultado})

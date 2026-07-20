@@ -71,3 +71,53 @@ def test_excecao_do_modelo_nao_quebra(db, monkeypatch):
     out = chat.responder(db, [{"role": "user", "content": "oi"}])
     assert out["levantamento"] is None
     assert "Texto direto" in out["mensagem"]
+
+
+def test_ferramenta_com_erro_devolve_feedback_para_ia(db, monkeypatch):
+    """Exceção numa ferramenta não mata a conversa: vira {"erro": ...} e a IA se corrige."""
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    historicos = []
+
+    def _explode(*a, **kw):
+        raise TypeError("shape errado")
+
+    monkeypatch.setattr(chat, "levantar", _explode)
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_proposta", {"estrutura": {"cliente": "GALLI"}})]),
+        _msg(content="Opa, me faltou informação — qual o empreendimento?"),
+    ]
+
+    def _modelo(mensagens_llm, tools):
+        historicos.append(list(mensagens_llm))
+        return respostas.pop(0)
+
+    monkeypatch.setattr(chat, "_chamar_modelo", _modelo)
+    out = chat.responder(db, [{"role": "user", "content": "proposta pra GALLI"}])
+    assert out["mensagem"] == "Opa, me faltou informação — qual o empreendimento?"
+    assert out["levantamento"] is None
+    ultima_tool = [m for m in historicos[1] if m.get("role") == "tool"][-1]
+    assert "erro" in ultima_tool["content"]
+
+
+def test_estrutura_incompleta_e_completada(db, monkeypatch):
+    """Estrutura parcial do modelo é completada com defaults antes de levantar."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_proposta",
+                                    {"estrutura": {"cliente": "GALLI",
+                                                   "externas": ["Perspectiva Fachada"]}})]),
+        _msg(content="Fechado! Deu R$3.000,00."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+    out = chat.responder(db, [{"role": "user", "content": "GALLI, uma fachada"}])
+    assert out["levantamento"] is not None
+    assert out["levantamento"]["fechado"]["orcamento"]["subtotal"] > 0
+
+
+def test_cliente_string_vira_objeto():
+    est = chat._completar_estrutura({"cliente": "GALLI"})
+    assert est["cliente"] == {"empresa": "GALLI", "ref": "", "contato": ""}
+    assert est["externas"] == [] and est["desconto_pct"] == 0
+    assert est["estrategia"] == "planilha" and est["_avisos"] == []
