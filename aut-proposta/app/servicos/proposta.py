@@ -15,10 +15,13 @@ from app.db.repo_propostas import atualizar_docx_url, salvar_proposta, upsert_cl
 from app.docx.gerador import gerar_docx
 from app.dominio.descontos import Desconto
 from app.dominio.orcamento import fechar_orcamento, orcar_pela_planilha
+from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
 from app.historico.historico import Historico
 from app.historico.orcamento_historico import orcar_pelo_historico
 from app.storage.r2 import enviar_docx
+
+TABELAS_VALIDAS = ("padrao", "mcmv")
 
 
 def _slug(texto: str) -> str:
@@ -26,15 +29,22 @@ def _slug(texto: str) -> str:
     return normalizar(texto).replace(" ", "-")
 
 
-def _descricoes(estrutura: dict[str, Any]) -> dict[str, list[str]]:
-    return {cat: estrutura.get(cat, []) for cat in ("externas", "internas", "plantas")}
+def _descricoes(estrutura: dict[str, Any], categorias: list[str]) -> dict[str, list[str]]:
+    return {cat: estrutura.get(cat, []) for cat in categorias}
 
 
 def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, Any]:
     """Resolve estratégia e preços (NEON) e devolve o orçamento fechado."""
     avisos = list(estrutura.get("_avisos", []))
-    tabela = carregar_tabela_precos(conn)
-    descricoes = _descricoes(estrutura)
+
+    tabela_precos = estrutura.get("tabela_precos") or "padrao"
+    if tabela_precos not in TABELAS_VALIDAS:
+        raise ValueError(
+            f"tabela_precos inválida: {tabela_precos!r} (válidas: {TABELAS_VALIDAS})"
+        )
+
+    tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
+    descricoes = _descricoes(estrutura, tabela.categorias())
     empresa = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
 
@@ -59,6 +69,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         "cliente": estrutura["cliente"],
         "fechado": fechar_orcamento(orc, desconto),
         "estrategia_usada": orc.estrategia,
+        "tabela_precos": tabela_precos,
         "avisos": avisos,
     }
 
@@ -70,7 +81,10 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     fechado = lev["fechado"]
 
     cliente_id = upsert_cliente(conn, cliente["empresa"], cliente.get("contato"))
-    proposta_id = salvar_proposta(conn, cliente_id, fechado, referencia=cliente.get("ref"))
+    proposta_id = salvar_proposta(
+        conn, cliente_id, fechado, referencia=cliente.get("ref"),
+        tabela_precos=lev["tabela_precos"],
+    )
 
     docx_path = Path(dir_saida) / f"proposta_{proposta_id}.docx"
     gerar_docx(

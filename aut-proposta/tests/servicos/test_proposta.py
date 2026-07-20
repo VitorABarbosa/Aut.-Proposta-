@@ -36,6 +36,33 @@ def test_levantar_planilha_precos_do_banco(db):
     assert out["estrategia_usada"] == "planilha"
     assert orc["externas"]["itens"][0]["preco"] == 3000  # fachada, preço do NEON
     assert orc["total_imagens"] == 3
+    assert out["tabela_precos"] == "padrao"
+
+
+def test_levantar_devolve_tabela_precos_padrao_por_default(db):
+    _prep(db)
+    out = svc.levantar(db, _estrutura())
+    assert out["tabela_precos"] == "padrao"
+
+
+def test_levantar_mcmv_precifica_interna_1500(db):
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "mcmv"
+    est["externas"] = []
+    est["internas"] = ["Academia"]
+    est["plantas"] = []
+    out = svc.levantar(db, est)
+    assert out["tabela_precos"] == "mcmv"
+    assert out["fechado"]["orcamento"]["internas"]["itens"][0]["preco"] == 1500
+
+
+def test_levantar_tabela_precos_invalida_levanta_erro(db):
+    _prep(db)
+    est = _estrutura()
+    est["tabela_precos"] = "inexistente"
+    with pytest.raises(ValueError):
+        svc.levantar(db, est)
 
 
 def test_levantar_com_desconto(db):

@@ -5,8 +5,6 @@ import psycopg
 
 from app.dominio.texto import normalizar
 
-CATEGORIAS = ("externas", "internas", "plantas")
-
 
 def upsert_cliente(conn: psycopg.Connection, nome: str, contato: str | None = None) -> int:
     nome_norm = normalizar(nome)
@@ -24,26 +22,36 @@ def upsert_cliente(conn: psycopg.Connection, nome: str, contato: str | None = No
     return novo_id
 
 
+def _categorias_do_orcamento(orc: dict) -> list[tuple[str, dict]]:
+    """Categorias reais do dict do orçamento: ignora chaves meta (iniciadas
+    por "_", ex. "_categorias") e valores que não são blocos de categoria."""
+    return [
+        (cat, bloco) for cat, bloco in orc.items()
+        if not cat.startswith("_") and isinstance(bloco, dict) and "itens" in bloco
+    ]
+
+
 def salvar_proposta(
     conn: psycopg.Connection,
     cliente_id: int,
     fechado: dict,
     referencia: str | None = None,
     docx_url: str | None = None,
+    tabela_precos: str = "padrao",
 ) -> int:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
             "INSERT INTO propostas "
-            "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url, tabela_precos) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (cliente_id, referencia, orc["subtotal"], fin["desconto_pct"],
-             fin["desconto_valor"], fin["total"], docx_url),
+             fin["desconto_valor"], fin["total"], docx_url, tabela_precos),
         )
         pid = cur.fetchone()[0]
-        for cat in CATEGORIAS:
-            for item in orc[cat]["itens"]:
+        for cat, bloco in _categorias_do_orcamento(orc):
+            for item in bloco["itens"]:
                 cur.execute(
                     "INSERT INTO proposta_itens (proposta_id, categoria, descricao, preco, origem) "
                     "VALUES (%s, %s, %s, %s, %s)",
@@ -63,16 +71,16 @@ def ultima_proposta_estruturada(conn: psycopg.Connection, cliente_id: int) -> di
             return None
         pid = row[0]
 
-        out: dict = {cat: {"qtd": 0, "total": 0, "itens": []} for cat in CATEGORIAS}
+        out: dict = {}
         cur.execute(
             "SELECT categoria, descricao, preco FROM proposta_itens WHERE proposta_id = %s ORDER BY id",
             (pid,),
         )
         for categoria, descricao, preco in cur.fetchall():
-            if categoria in out:
-                out[categoria]["itens"].append({"desc": descricao, "preco": preco})
-                out[categoria]["qtd"] += 1
-                out[categoria]["total"] += preco
+            bloco = out.setdefault(categoria, {"qtd": 0, "total": 0, "itens": []})
+            bloco["itens"].append({"desc": descricao, "preco": preco})
+            bloco["qtd"] += 1
+            bloco["total"] += preco
     return out
 
 
@@ -87,27 +95,30 @@ def atualizar_docx_url(conn: psycopg.Connection, proposta_id: int, docx_url: str
 
 
 def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> dict | None:
-    """Reconstrói a estrutura (shape do parser) para copiar/reprecificar."""
+    """Reconstrói a estrutura (shape do parser) para copiar/reprecificar.
+
+    As categorias na estrutura devolvida são as que o SELECT encontrar
+    (dinâmicas — sem descarte de categorias fora das 3 fixas antigas).
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct "
+            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct, p.tabela_precos "
             "FROM propostas p JOIN clientes c ON c.id = p.cliente_id WHERE p.id = %s",
             (proposta_id,),
         )
         row = cur.fetchone()
         if not row:
             return None
-        nome, contato, referencia, desconto_pct = row
+        nome, contato, referencia, desconto_pct, tabela_precos = row
 
-        listas: dict[str, list[str]] = {cat: [] for cat in CATEGORIAS}
+        listas: dict[str, list[str]] = {}
         cur.execute(
             "SELECT categoria, descricao FROM proposta_itens "
             "WHERE proposta_id = %s ORDER BY id",
             (proposta_id,),
         )
         for categoria, descricao in cur.fetchall():
-            if categoria in listas:
-                listas[categoria].append(descricao)
+            listas.setdefault(categoria, []).append(descricao)
 
     return {
         "cliente": {"empresa": nome, "ref": referencia or "", "contato": contato or ""},
@@ -116,6 +127,7 @@ def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> d
         "desconto_label": None,
         "estrategia": "planilha",
         "mostrar_precos_individuais": False,
+        "tabela_precos": tabela_precos,
         "_avisos": [],
     }
 

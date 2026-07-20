@@ -32,6 +32,53 @@ def _fechado_exemplo():
     }
 
 
+def _fechado_com_filmes():
+    return {
+        "orcamento": {
+            "estrategia": "planilha",
+            "subtotal": 15000,
+            "total_imagens": 1,
+            "filmes": {"nome": "filmes", "qtd": 1, "total": 15000,
+                       "itens": [{"descricao": "Filme 3D — 60 segundos", "preco": 15000,
+                                  "fonte": "planilha:filme_3d_60s"}]},
+            "_categorias": [{"nome": "filmes", "rotulo": "Filmes e Takes 3D"}],
+        },
+        "financeiro": {"subtotal": 15000, "desconto_pct": 0.0, "desconto_valor": 0.0,
+                       "total": 15000.0, "rotulo": ""},
+    }
+
+
+def test_salvar_proposta_categoria_filmes_nao_e_descartada(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "FILMES CLIENTE")
+    pid = salvar_proposta(db, cid, _fechado_com_filmes())
+
+    with db.cursor() as cur:
+        cur.execute("SELECT categoria, preco FROM proposta_itens WHERE proposta_id=%s", (pid,))
+        rows = cur.fetchall()
+    assert rows == [("filmes", 15000)]
+
+    ult = ultima_proposta_estruturada(db, cid)
+    assert ult["filmes"]["qtd"] == 1
+    assert ult["filmes"]["itens"][0] == {"desc": "Filme 3D — 60 segundos", "preco": 15000}
+
+    estrutura = obter_estrutura_de_proposta(db, pid)
+    assert estrutura["filmes"] == ["Filme 3D — 60 segundos"]
+
+
+def test_salvar_proposta_grava_e_rele_tabela_precos(db):
+    aplicar_schema(db)
+    cid = upsert_cliente(db, "MCMV CLIENTE")
+    pid = salvar_proposta(db, cid, _fechado_exemplo(), tabela_precos="mcmv")
+
+    with db.cursor() as cur:
+        cur.execute("SELECT tabela_precos FROM propostas WHERE id=%s", (pid,))
+        assert cur.fetchone()[0] == "mcmv"
+
+    estrutura = obter_estrutura_de_proposta(db, pid)
+    assert estrutura["tabela_precos"] == "mcmv"
+
+
 def test_upsert_cliente_idempotente(db):
     aplicar_schema(db)
     id1 = upsert_cliente(db, "GALLI", "Daniel Pucci")

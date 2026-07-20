@@ -52,7 +52,7 @@ def test_reaplica_preco_do_historico_item_exato(db):
     assert orc is not None
     assert orc.estrategia == "historico:BRNPAR"
     # Reaplica 1800 (histórico), não 1750 (tabela).
-    assert orc.internas.itens[0].preco == 1800
+    assert orc.categorias["internas"].itens[0].preco == 1800
 
 
 def test_item_novo_cai_para_media_ou_planilha(db):
@@ -63,4 +63,4 @@ def test_item_novo_cai_para_media_ou_planilha(db):
     hist = Historico(db)
     # Descrição de externas que o cliente nunca teve -> média (0 itens) -> planilha 1900.
     orc = orcar_pelo_historico(hist, "BRNPAR", {"externas": ["Jardim"]}, TabelaPrecos(DADOS))
-    assert orc.externas.itens[0].preco == 1900
+    assert orc.categorias["externas"].itens[0].preco == 1900
