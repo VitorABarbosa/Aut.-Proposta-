@@ -17,8 +17,7 @@ from pydantic import BaseModel, model_validator
 from app.db.conexao import get_conn
 from app.db.repo_propostas import excluir_proposta, listar_propostas
 from app.docx.pdf import converter_para_pdf
-from app.ia.parser import parse
-from app.servicos.proposta import gerar, levantar
+from app.servicos.proposta import gerar, levantar, parse_texto
 from app.storage.r2 import excluir_objetos
 
 app = FastAPI(title="Automação de Proposta — Flying Studio")
@@ -103,9 +102,10 @@ def saude():
 
 @app.post("/levantamento", dependencies=[Depends(verificar_token)])
 def rota_levantamento(corpo: CorpoLevantamento):
-    estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
     conn = _abrir_conn()
     try:
+        estrutura = (corpo.estrutura if corpo.estrutura is not None
+                     else parse_texto(conn, corpo.texto))
         lev = levantar(conn, estrutura)
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
@@ -122,9 +122,10 @@ def rota_levantamento(corpo: CorpoLevantamento):
 
 @app.post("/propostas", dependencies=[Depends(verificar_token)])
 def rota_gerar(corpo: CorpoProposta):
-    estrutura = corpo.estrutura if corpo.estrutura is not None else parse(corpo.texto)
     conn = _abrir_conn()
     try:
+        estrutura = (corpo.estrutura if corpo.estrutura is not None
+                     else parse_texto(conn, corpo.texto))
         out = gerar(conn, estrutura, _dir_saida())
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
