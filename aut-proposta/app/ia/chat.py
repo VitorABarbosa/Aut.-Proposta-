@@ -50,9 +50,16 @@ REGRAS INEGOCIÁVEIS:
   (nome entre parênteses acima, ex.: externas/internas/plantas/filmes/...) =
   lista de descrições de itens (uma string por unidade, repita a descrição se
   houver mais de uma unidade igual).
-- Para consultar propostas antigas de um cliente, chame listar_propostas_cliente.
+- Para consultar propostas antigas, chame listar_propostas_cliente (sem o nome
+  do cliente ela devolve as mais recentes de todos).
 - Para copiar uma proposta mudando algo, chame carregar_proposta, ajuste a
   estrutura conforme o pedido e chame precificar_proposta.
+- MEMÓRIA DE FERRAMENTAS: você NÃO guarda resultados de ferramentas entre
+  mensagens — a cada mensagem nova, ids e dados de propostas antigas precisam
+  ser reobtidos. Se o usuário pedir para copiar/carregar e você não tiver o id
+  NESTA rodada, chame listar_propostas_cliente de novo AGORA e encadeie com
+  carregar_proposta na mesma rodada — nunca diga que "não conseguiu acessar"
+  sem antes relistar.
 - Depois de precificar, resuma os valores devolvidos e diga que o preview ao lado
   foi atualizado; se não houver pendências, diga que é só clicar em Gerar.
 
@@ -126,12 +133,18 @@ def _ferramentas(categorias: list[str]) -> list[dict]:
                            "required": ["estrutura"]}}},
         {"type": "function", "function": {
             "name": "listar_propostas_cliente",
-            "description": "Lista as propostas já feitas para um cliente (id, projeto, data, total).",
-            "parameters": {"type": "object", "properties": {"cliente": {"type": "string"}},
-                           "required": ["cliente"]}}},
+            "description": "Lista propostas já feitas (id, cliente, projeto, data, total), "
+                           "mais recente primeiro. Sem 'cliente', lista de TODOS os "
+                           "clientes — use assim para 'a proposta mais recente'.",
+            "parameters": {"type": "object",
+                           "properties": {"cliente": {
+                               "type": "string",
+                               "description": "Nome do cliente (opcional)"}},
+                           "required": []}}},
         {"type": "function", "function": {
             "name": "carregar_proposta",
-            "description": "Carrega a estrutura completa de uma proposta antiga pelo id, "
+            "description": "Carrega a estrutura completa de uma proposta antiga pelo id "
+                           "(o campo 'id' devolvido por listar_propostas_cliente), "
                            "para copiar/ajustar e depois precificar.",
             "parameters": {"type": "object", "properties": {"proposta_id": {"type": "integer"}},
                            "required": ["proposta_id"]}}},
@@ -223,19 +236,47 @@ def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict,
         # Sem docx_url: o bucket é privado e a IA não deve citar links —
         # download é pela aba Histórico.
         propostas = [{k: v for k, v in p.items() if k != "docx_url"}
-                     for p in listar_propostas(conn, args["cliente"])]
+                     for p in listar_propostas(conn, args.get("cliente") or None)]
         return json.dumps(propostas, ensure_ascii=False), None
     if nome == "carregar_proposta":
         est = obter_estrutura_de_proposta(conn, int(args["proposta_id"]))
+        if est is None:
+            return json.dumps(
+                {"erro": f"proposta {args['proposta_id']} não encontrada — chame "
+                         "listar_propostas_cliente para obter o id correto e tente de novo."},
+                ensure_ascii=False), None
         return json.dumps(est, ensure_ascii=False), None
     return json.dumps({"erro": f"ferramenta desconhecida: {nome}"}), None
 
 
+def _citar_propostas(nome: str, args: dict, resultado: str,
+                     citadas: dict[int, dict]) -> None:
+    """Coleta as propostas tocadas pelas ferramentas na rodada — o hub mostra
+    botões de download (a IA não pode citar links: bucket privado)."""
+    try:
+        dados = json.loads(resultado)
+    except (ValueError, TypeError):
+        return
+    if nome == "listar_propostas_cliente" and isinstance(dados, list):
+        for p in dados[:5]:
+            if isinstance(p, dict) and "id" in p:
+                citadas[p["id"]] = {"id": p["id"], "cliente": p.get("cliente", ""),
+                                    "referencia": p.get("referencia") or ""}
+    elif nome == "carregar_proposta" and isinstance(dados, dict) and "erro" not in dados:
+        pid = int(args.get("proposta_id") or 0)
+        cli = dados.get("cliente") if isinstance(dados.get("cliente"), dict) else {}
+        if pid:
+            citadas[pid] = {"id": pid, "cliente": cli.get("empresa", ""),
+                            "referencia": cli.get("ref") or ""}
+
+
 def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]:
     if not mensagens:
-        return {"mensagem": SAUDACAO, "quick_replies": QUICK_REPLIES, "levantamento": None}
+        return {"mensagem": SAUDACAO, "quick_replies": QUICK_REPLIES,
+                "levantamento": None, "propostas_citadas": []}
     if not os.getenv("OPENAI_API_KEY"):
-        return {"mensagem": MSG_SEM_IA, "quick_replies": [], "levantamento": None}
+        return {"mensagem": MSG_SEM_IA, "quick_replies": [],
+                "levantamento": None, "propostas_citadas": []}
 
     # Catálogo carregado 1x por request, fora do try/except abaixo (que só
     # cobre a conversa com o modelo): falha de banco deve propagar como nas
@@ -247,12 +288,14 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
 
     llm: list[dict] = [{"role": "system", "content": system_prompt}] + list(mensagens)
     levantamento: dict | None = None
+    citadas: dict[int, dict] = {}
     try:
         for _ in range(MAX_RODADAS):
             msg = _chamar_modelo(llm, ferramentas)
             if not getattr(msg, "tool_calls", None):
                 return {"mensagem": msg.content or "", "quick_replies": [],
-                        "levantamento": levantamento}
+                        "levantamento": levantamento,
+                        "propostas_citadas": list(citadas.values())}
             llm.append({"role": "assistant", "content": msg.content,
                         "tool_calls": [
                             {"id": tc.id, "type": "function",
@@ -262,9 +305,11 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
             for tc in msg.tool_calls:
                 # Erro de ferramenta volta para a IA se corrigir na próxima
                 # rodada; só falha de _chamar_modelo derruba para MSG_SEM_IA.
+                args_tc: dict = {}
                 try:
+                    args_tc = json.loads(tc.function.arguments)
                     resultado, lev = _executar_ferramenta(
-                        conn, tc.function.name, json.loads(tc.function.arguments), categorias)
+                        conn, tc.function.name, args_tc, categorias)
                 except Exception as exc:  # noqa: BLE001
                     resultado, lev = json.dumps(
                         {"erro": f"argumentos inválidos para {tc.function.name}: "
@@ -272,8 +317,11 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
                         ensure_ascii=False), None
                 if lev is not None:
                     levantamento = lev
+                _citar_propostas(tc.function.name, args_tc, resultado, citadas)
                 llm.append({"role": "tool", "tool_call_id": tc.id, "content": resultado})
         return {"mensagem": "Precisei de muitas etapas — pode repetir de forma mais direta?",
-                "quick_replies": [], "levantamento": levantamento}
+                "quick_replies": [], "levantamento": levantamento,
+                "propostas_citadas": list(citadas.values())}
     except Exception:  # noqa: BLE001 — IA indisponível nunca derruba o chat
-        return {"mensagem": MSG_SEM_IA, "quick_replies": [], "levantamento": None}
+        return {"mensagem": MSG_SEM_IA, "quick_replies": [],
+                "levantamento": None, "propostas_citadas": []}
