@@ -176,3 +176,44 @@ def test_listar_para_ia_nao_expoe_docx_url(db, monkeypatch):
     assert lev is None
     assert "docx_url" not in resultado and "r2/privado" not in resultado
     assert "GALLI" in resultado
+
+
+def test_listar_sem_cliente_devolve_todas(db, monkeypatch):
+    """'A mais recente' sem cliente: a ferramenta aceita chamada sem argumento."""
+    chamadas = []
+    monkeypatch.setattr(chat, "listar_propostas",
+                        lambda conn, cliente: chamadas.append(cliente) or [])
+    chat._executar_ferramenta(db, "listar_propostas_cliente", {})
+    chat._executar_ferramenta(db, "listar_propostas_cliente", {"cliente": ""})
+    assert chamadas == [None, None]
+
+
+def test_carregar_inexistente_devolve_erro_orientando_relistar(db, monkeypatch):
+    """Id perdido entre mensagens (stateless): erro instrui a IA a relistar."""
+    monkeypatch.setattr(chat, "obter_estrutura_de_proposta", lambda conn, pid: None)
+    resultado, lev = chat._executar_ferramenta(db, "carregar_proposta", {"proposta_id": 99})
+    assert lev is None
+    assert "erro" in resultado and "listar_propostas_cliente" in resultado
+
+
+def test_propostas_citadas_apos_listar(db, monkeypatch):
+    """Ferramentas que tocam propostas viram propostas_citadas — o hub mostra
+    botões de download (a IA não pode citar links)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(chat, "listar_propostas",
+                        lambda conn, cliente: [{"id": 7, "cliente": "Avita",
+                                                "referencia": "FRANCISCO POLITO",
+                                                "data": "2026-07-20", "total": 33320.0,
+                                                "docx_url": None}])
+    respostas = [
+        _msg(tool_calls=[_tool_call("listar_propostas_cliente", {"cliente": "Avita"})]),
+        _msg(content="Achei a proposta FRANCISCO POLITO, de R$33.320,00."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+    out = chat.responder(db, [{"role": "user", "content": "consulta a Avita"}])
+    assert out["propostas_citadas"] == [{"id": 7, "cliente": "Avita",
+                                         "referencia": "FRANCISCO POLITO"}]
+
+
+def test_propostas_citadas_vazia_na_saudacao(db):
+    assert chat.responder(db, [])["propostas_citadas"] == []
