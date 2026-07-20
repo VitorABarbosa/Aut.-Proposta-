@@ -39,6 +39,12 @@ REGRAS INEGOCIÁVEIS:
   estrutura conforme o pedido e chame precificar_proposta.
 - Depois de precificar, resuma os valores devolvidos e diga que o preview ao lado
   foi atualizado; se não houver pendências, diga que é só clicar em Gerar.
+
+FORMATO DAS RESPOSTAS:
+- Texto simples, SEM markdown: nada de **negrito**, títulos, tabelas ou colchetes
+  de link. Frases curtas; se listar, use hífen simples no começo da linha.
+- NUNCA inclua URLs ou links em nenhuma resposta. Para baixar uma proposta,
+  oriente: "é só baixar na aba Histórico".
 """
 
 _ESTRUTURA_SCHEMA = {
@@ -165,7 +171,11 @@ def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict) -> tup
         }
         return json.dumps(resumo, ensure_ascii=False), lev_out
     if nome == "listar_propostas_cliente":
-        return json.dumps(listar_propostas(conn, args["cliente"]), ensure_ascii=False), None
+        # Sem docx_url: o bucket é privado e a IA não deve citar links —
+        # download é pela aba Histórico.
+        propostas = [{k: v for k, v in p.items() if k != "docx_url"}
+                     for p in listar_propostas(conn, args["cliente"])]
+        return json.dumps(propostas, ensure_ascii=False), None
     if nome == "carregar_proposta":
         est = obter_estrutura_de_proposta(conn, int(args["proposta_id"]))
         return json.dumps(est, ensure_ascii=False), None

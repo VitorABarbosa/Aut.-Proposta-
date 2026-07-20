@@ -121,3 +121,17 @@ def test_cliente_string_vira_objeto():
     assert est["cliente"] == {"empresa": "GALLI", "ref": "", "contato": ""}
     assert est["externas"] == [] and est["desconto_pct"] == 0
     assert est["estrategia"] == "planilha" and est["_avisos"] == []
+
+
+def test_listar_para_ia_nao_expoe_docx_url(db, monkeypatch):
+    """O bucket é privado: a IA não recebe docx_url (links são pela aba Histórico)."""
+    monkeypatch.setattr(chat, "listar_propostas",
+                        lambda conn, cliente: [{"id": 1, "cliente": "GALLI",
+                                                "referencia": "Aurora", "data": "2026-07-19",
+                                                "total": 3000.0,
+                                                "docx_url": "https://r2/privado.docx"}])
+    resultado, lev = chat._executar_ferramenta(db, "listar_propostas_cliente",
+                                               {"cliente": "GALLI"})
+    assert lev is None
+    assert "docx_url" not in resultado and "r2/privado" not in resultado
+    assert "GALLI" in resultado
