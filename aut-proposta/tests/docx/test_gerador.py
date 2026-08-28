@@ -162,7 +162,7 @@ def test_categorias_meta_ausente_usa_fallback_fixo(tmp_path):
 
 
 def test_destaques_inline_do_modelo(tmp_path):
-    """Fidelidade run a run: negritos, itálicos/sublinhados e marca-texto do exemplo."""
+    """Fidelidade run a run: negritos e itálicos/sublinhados do exemplo."""
     saida = tmp_path / "p.docx"
     gerar_docx(CLIENTE, _fechado_galli(), saida)
     doc = Document(str(saida))
@@ -173,9 +173,11 @@ def test_destaques_inline_do_modelo(tmp_path):
                 return p.runs
         raise AssertionError(f"parágrafo não encontrado: {paragrafo_contendo}")
 
-    # Cliente/REF e A/C: negrito + marca-texto amarelo.
-    r = runs_de("GALLI - REF:")[0]
-    assert r.bold and r.font.highlight_color is not None
+    # Cliente/REF e A/C: negrito e SEM marca-texto (nada de letra pintada de amarelo).
+    for cabecalho in ("GALLI - REF:", "A/C:"):
+        r = runs_de(cabecalho)[0]
+        assert r.bold
+        assert r.font.highlight_color is None
 
     # NID Studio em negrito dentro do OBS.
     runs = runs_de("NID Studio")
