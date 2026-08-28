@@ -274,7 +274,9 @@ def test_print_vira_texto_antes_de_chegar_no_chat(db, monkeypatch, leitura_mocka
     assert "olha esse print" in conteudo          # o texto do usuário é preservado
     assert "GALLI" in conteudo and "Fachada noturna" in conteudo
     assert "DÚVIDAS" in conteudo
-    assert out["transcricao"] == TRANSCRICAO
+    # A transcrição devolvida é exatamente o que foi para o modelo: o front
+    # grava no lugar da imagem e para de reenviar o base64.
+    assert out["transcricao"] == conteudo
 
 
 def test_imagem_e_lida_uma_vez_mesmo_com_o_front_reenviando(db, monkeypatch, leitura_mockada):
