@@ -333,6 +333,11 @@ def _preparar_mensagens(mensagens: list[dict],
     Só o texto segue para o modelo da conversa: a imagem é lida uma vez e o
     resultado vem do cache nas rodadas seguintes (o front reenvia o histórico
     inteiro, base64 incluído, a cada mensagem).
+
+    O segundo item devolvido é o conteúdo montado da última mensagem com print
+    — o mesmo texto que foi para o modelo. O front pode gravá-lo no lugar da
+    imagem e parar de reenviar o base64; a rodada seguinte fica idêntica para
+    o modelo, e nem o cache precisa ser consultado.
     """
     preparadas: list[dict] = []
     transcricao: str | None = None
@@ -346,8 +351,9 @@ def _preparar_mensagens(mensagens: list[dict],
                 f"Consigo ler até {MAX_IMAGENS} prints por mensagem. "
                 "Manda os mais importantes primeiro.")
         imagens = [normalizar_imagem(url) for url in urls]
-        transcricao = transcrever(imagens, tabela)
-        conteudo = "\n\n".join(p for p in (texto, em_bloco(transcricao)) if p)
+        conteudo = "\n\n".join(
+            p for p in (texto, em_bloco(transcrever(imagens, tabela))) if p)
+        transcricao = conteudo
         preparadas.append({**msg, "content": conteudo})
     return preparadas, transcricao
 

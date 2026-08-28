@@ -64,8 +64,8 @@ arquivo, downscale para 1400 px no maior lado) e vira uma transcrição em texto
 com construtora, empreendimento, A/C, itens e dúvidas. Da segunda rodada em
 diante a transcrição sai do cache e o que segue para o modelo é só texto — o
 front reenvia o histórico inteiro a cada mensagem, e imagem custa caro em
-token. A resposta devolve essa transcrição em `transcricao`, para o front
-poder parar de reenviar o base64.
+token. A resposta devolve em `transcricao` exatamente o texto que foi para o
+modelo — o front grava isso no lugar da imagem e para de reenviar o base64.
 
 Item que não casa claramente com o catálogo nunca é chutado numa categoria:
 vai para as dúvidas da transcrição e o chat pergunta.
