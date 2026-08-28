@@ -217,3 +217,144 @@ def test_propostas_citadas_apos_listar(db, monkeypatch):
 
 def test_propostas_citadas_vazia_na_saudacao(db):
     assert chat.responder(db, [])["propostas_citadas"] == []
+
+
+# ---------- leitura de print ----------
+
+def _png_base64(largura=900, altura=600) -> str:
+    import base64
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (largura, altura), (10, 10, 200)).save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _msg_com_print(texto="olha esse print"):
+    return {"role": "user", "content": [
+        {"type": "text", "text": texto},
+        {"type": "image_url", "image_url": {"url": _png_base64()}},
+    ]}
+
+
+TRANSCRICAO = ("CONSTRUTORA: GALLI\nEMPREENDIMENTO: Aurora\nA/C: Daniel\n"
+               "ITENS:\n- externas | Fachada noturna | 3\n"
+               'DÚVIDAS:\n- "umas internas do apto tipo" | candidatos: internas, plantas\n'
+               "OBSERVAÇÕES: nenhuma")
+
+
+@pytest.fixture
+def leitura_mockada(monkeypatch):
+    """Modelo de visão mockado + cache limpo; devolve a lista de chamadas."""
+    from collections import OrderedDict
+
+    from app.ia import leitura_print
+    monkeypatch.setattr(leitura_print, "_cache", OrderedDict())
+    chamadas: list = []
+    monkeypatch.setattr(leitura_print, "_chamar_modelo",
+                        lambda prompt, imgs: chamadas.append(imgs) or TRANSCRICAO)
+    return chamadas
+
+
+def test_print_vira_texto_antes_de_chegar_no_chat(db, monkeypatch, leitura_mockada):
+    """A conversa nunca vê base64: a imagem entra como transcrição estruturada."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    vistas = []
+    monkeypatch.setattr(chat, "_chamar_modelo",
+                        lambda m, t: vistas.append(m) or _msg(content="Boa! Confirma o A/C?"))
+
+    out = chat.responder(db, [_msg_com_print()])
+
+    conteudo = vistas[0][-1]["content"]
+    assert isinstance(conteudo, str)
+    assert "base64" not in conteudo
+    assert "olha esse print" in conteudo          # o texto do usuário é preservado
+    assert "GALLI" in conteudo and "Fachada noturna" in conteudo
+    assert "DÚVIDAS" in conteudo
+    assert out["transcricao"] == TRANSCRICAO
+
+
+def test_imagem_e_lida_uma_vez_mesmo_com_o_front_reenviando(db, monkeypatch, leitura_mockada):
+    """Chat stateless: o front reenvia o print a cada rodada, mas ele é lido 1x."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: _msg(content="ok"))
+
+    historico = [_msg_com_print()]
+    for i in range(6):  # seis idas e vindas sobre a mesma proposta
+        chat.responder(db, historico)
+        historico += [{"role": "assistant", "content": "ok"},
+                      {"role": "user", "content": f"pergunta {i}"}]
+
+    assert len(leitura_mockada) == 1
+
+
+def test_print_gigante_recebe_orientacao_em_vez_de_erro(db, monkeypatch, leitura_mockada):
+    import base64
+
+    from app.ia import visao
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(chat, "_chamar_modelo",
+                        lambda m, t: pytest.fail("não deveria chamar o modelo"))
+
+    gordo = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * (visao.MAX_BYTES + 1)).decode()
+    out = chat.responder(db, [{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + gordo}}]}])
+
+    assert "grande demais" in out["mensagem"]
+    assert out["levantamento"] is None
+    assert leitura_mockada == []
+
+
+def test_anexo_que_nao_e_imagem_e_recusado(db, monkeypatch, leitura_mockada):
+    import base64
+
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(chat, "_chamar_modelo",
+                        lambda m, t: pytest.fail("não deveria chamar o modelo"))
+
+    pdf = base64.b64encode(b"%PDF-1.7 documento").decode()
+    out = chat.responder(db, [{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + pdf}}]}])
+
+    assert "não é uma imagem" in out["mensagem"]
+    assert leitura_mockada == []
+
+
+def test_falha_da_leitura_nao_derruba_o_chat(db, monkeypatch):
+    from collections import OrderedDict
+
+    from app.ia import leitura_print
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(leitura_print, "_cache", OrderedDict())
+
+    def _explode(prompt, imgs):
+        raise RuntimeError("visão fora do ar")
+    monkeypatch.setattr(leitura_print, "_chamar_modelo", _explode)
+
+    out = chat.responder(db, [_msg_com_print()])
+    assert "Texto direto" in out["mensagem"]
+
+
+def test_conversa_sem_print_segue_igual(db, monkeypatch):
+    """Mensagem de texto puro não passa por nada novo."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    vistas = []
+    monkeypatch.setattr(chat, "_chamar_modelo",
+                        lambda m, t: vistas.append(m) or _msg(content="oi"))
+
+    out = chat.responder(db, [{"role": "user", "content": "proposta pra GALLI"}])
+    assert vistas[0][-1] == {"role": "user", "content": "proposta pra GALLI"}
+    assert out["transcricao"] is None

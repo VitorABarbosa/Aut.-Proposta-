@@ -4,6 +4,11 @@ A IA conduz a conversa (descontraída, pergunta o que falta, aceita tudo de
 uma vez) e usa ferramentas para QUALQUER número: precificar, listar
 propostas do cliente e carregar proposta antiga para copiar. Stateless — o
 front manda o histórico inteiro a cada rodada.
+
+Print anexado não entra nessa reenvio caro: antes de falar com o modelo, cada
+mensagem com imagem passa pelas guardas de `app.ia.visao` e é trocada pela
+transcrição em texto de `app.ia.leitura_print`, que lê o print uma única vez
+(cache por hash). Da segunda rodada em diante a conversa segue só com texto.
 """
 from __future__ import annotations
 
@@ -16,6 +21,8 @@ import psycopg
 from app.db.repo_precos import carregar_tabela_precos
 from app.db.repo_propostas import listar_propostas, obter_estrutura_de_proposta
 from app.dominio.precos import TabelaPrecos
+from app.ia.leitura_print import em_bloco, transcrever
+from app.ia.visao import MAX_IMAGENS, ImagemInvalida, normalizar_imagem
 from app.servicos.proposta import levantar
 
 SAUDACAO = "Oi, tudo bem? O que vamos fazer hoje?"
@@ -35,10 +42,32 @@ uma coisa por vez.
 
 {catalogo}
 
+COMO ENTENDER O PEDIDO (releia a conversa inteira antes de responder):
+- Junte o que já foi dito nas mensagens anteriores. NUNCA pergunte de novo algo
+  que o usuário já respondeu, nem repita a pergunta que ele acabou de responder
+  com outras palavras.
+- Uma mensagem pode trazer várias informações de uma vez — aproveite todas
+  antes de perguntar a próxima coisa.
+- Entenda linguagem solta e quantidade por extenso: "três fachadas" = 3
+  unidades; "mais duas" soma às que já existem; "tira uma" subtrai.
+- Correção é ordem: "na verdade são 4", "troca o A/C pra Ana", "esquece as
+  plantas" — aplique a mudança sobre a estrutura atual e precifique de novo.
+- Sempre que a estrutura mudar, chame precificar_proposta de novo: o preview ao
+  lado é o resultado da ÚLTIMA chamada, não do que você escreveu na mensagem.
+- Se não entendeu o pedido, pergunte o que faltou em uma frase — não responda
+  por aproximação nem mude de assunto.
+
+PRINT ANEXADO: quando aparecer um bloco "[LEITURA DO PRINT ANEXADO]", ele vale
+como pedido escrito pelo usuário. Use a construtora, o empreendimento, o A/C e
+os ITENS que vierem ali; pergunte só o que estiver como "não informado". Cada
+linha de DÚVIDAS é uma pergunta a fazer com os candidatos citados — nunca
+classifique esses trechos por conta própria.
+
 REGRA DE RIGIDEZ: se o pedido não casar claramente com um item do catálogo
 acima, NÃO classifique por palpite. Pergunte ao usuário qual item corresponde,
 citando 2-3 candidatos do catálogo. Um serviço que não é imagem NUNCA entra
-como ilustração externa/interna.
+como ilustração externa/interna. Vale igual (ou mais) para pedido vindo de
+print, que costuma chegar em linguagem solta e sem quantidade explícita.
 
 MCMV: se o usuário indicar que o empreendimento é Minha Casa Minha Vida
 (MCMV/faixa/raiz), use tabela_precos='mcmv'. Na dúvida, pergunte.
@@ -164,7 +193,7 @@ def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
         model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         messages=mensagens_llm,
         tools=tools,
-        temperature=0.4,
+        temperature=0.2,
     )
     return resp.choices[0].message
 
@@ -270,13 +299,74 @@ def _citar_propostas(nome: str, args: dict, resultado: str,
                             "referencia": cli.get("ref") or ""}
 
 
+def _separar_conteudo(content: Any) -> tuple[str, list[str]]:
+    """Separa o `content` de uma mensagem em (texto, urls das imagens).
+
+    Aceita o formato de partes da OpenAI — [{"type": "text", ...},
+    {"type": "image_url", "image_url": {"url": ...}}] — e o `image_url` como
+    string solta, que alguns clientes mandam.
+    """
+    if not isinstance(content, list):
+        return (content if isinstance(content, str) else ""), []
+    textos: list[str] = []
+    urls: list[str] = []
+    for parte in content:
+        if isinstance(parte, str):
+            textos.append(parte)
+            continue
+        if not isinstance(parte, dict):
+            continue
+        if parte.get("type") == "image_url" or "image_url" in parte:
+            img = parte.get("image_url")
+            url = img.get("url") if isinstance(img, dict) else img
+            if isinstance(url, str):
+                urls.append(url)
+        elif isinstance(parte.get("text"), str):
+            textos.append(parte["text"])
+    return "\n".join(t for t in textos if t.strip()), urls
+
+
+def _preparar_mensagens(mensagens: list[dict],
+                        tabela: TabelaPrecos) -> tuple[list[dict], str | None]:
+    """Troca cada mensagem com print pela sua transcrição em texto.
+
+    Só o texto segue para o modelo da conversa: a imagem é lida uma vez e o
+    resultado vem do cache nas rodadas seguintes (o front reenvia o histórico
+    inteiro, base64 incluído, a cada mensagem).
+    """
+    preparadas: list[dict] = []
+    transcricao: str | None = None
+    for msg in mensagens:
+        texto, urls = _separar_conteudo(msg.get("content"))
+        if not urls:
+            preparadas.append(msg)
+            continue
+        if len(urls) > MAX_IMAGENS:
+            raise ImagemInvalida(
+                f"Consigo ler até {MAX_IMAGENS} prints por mensagem. "
+                "Manda os mais importantes primeiro.")
+        imagens = [normalizar_imagem(url) for url in urls]
+        transcricao = transcrever(imagens, tabela)
+        conteudo = "\n\n".join(p for p in (texto, em_bloco(transcricao)) if p)
+        preparadas.append({**msg, "content": conteudo})
+    return preparadas, transcricao
+
+
+def _resposta(mensagem: str, *, quick_replies: list[str] | None = None,
+              levantamento: dict | None = None,
+              propostas_citadas: list[dict] | None = None,
+              transcricao: str | None = None) -> dict[str, Any]:
+    return {"mensagem": mensagem, "quick_replies": quick_replies or [],
+            "levantamento": levantamento,
+            "propostas_citadas": propostas_citadas or [],
+            "transcricao": transcricao}
+
+
 def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]:
     if not mensagens:
-        return {"mensagem": SAUDACAO, "quick_replies": QUICK_REPLIES,
-                "levantamento": None, "propostas_citadas": []}
+        return _resposta(SAUDACAO, quick_replies=QUICK_REPLIES)
     if not os.getenv("OPENAI_API_KEY"):
-        return {"mensagem": MSG_SEM_IA, "quick_replies": [],
-                "levantamento": None, "propostas_citadas": []}
+        return _resposta(MSG_SEM_IA)
 
     # Catálogo carregado 1x por request, fora do try/except abaixo (que só
     # cobre a conversa com o modelo): falha de banco deve propagar como nas
@@ -286,6 +376,15 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
     system_prompt = _montar_system_prompt(tabela)
     ferramentas = _ferramentas(categorias)
 
+    # Prints viram texto ANTES da conversa: guarda recusada é erro do usuário
+    # (mensagem própria), falha da leitura cai no mesmo MSG_SEM_IA do chat.
+    try:
+        mensagens, transcricao = _preparar_mensagens(mensagens, tabela)
+    except ImagemInvalida as exc:
+        return _resposta(str(exc))
+    except Exception:  # noqa: BLE001 — IA indisponível nunca derruba o chat
+        return _resposta(MSG_SEM_IA)
+
     llm: list[dict] = [{"role": "system", "content": system_prompt}] + list(mensagens)
     levantamento: dict | None = None
     citadas: dict[int, dict] = {}
@@ -293,9 +392,9 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
         for _ in range(MAX_RODADAS):
             msg = _chamar_modelo(llm, ferramentas)
             if not getattr(msg, "tool_calls", None):
-                return {"mensagem": msg.content or "", "quick_replies": [],
-                        "levantamento": levantamento,
-                        "propostas_citadas": list(citadas.values())}
+                return _resposta(msg.content or "", levantamento=levantamento,
+                                 propostas_citadas=list(citadas.values()),
+                                 transcricao=transcricao)
             llm.append({"role": "assistant", "content": msg.content,
                         "tool_calls": [
                             {"id": tc.id, "type": "function",
@@ -319,9 +418,9 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
                     levantamento = lev
                 _citar_propostas(tc.function.name, args_tc, resultado, citadas)
                 llm.append({"role": "tool", "tool_call_id": tc.id, "content": resultado})
-        return {"mensagem": "Precisei de muitas etapas — pode repetir de forma mais direta?",
-                "quick_replies": [], "levantamento": levantamento,
-                "propostas_citadas": list(citadas.values())}
+        return _resposta("Precisei de muitas etapas — pode repetir de forma mais direta?",
+                         levantamento=levantamento,
+                         propostas_citadas=list(citadas.values()),
+                         transcricao=transcricao)
     except Exception:  # noqa: BLE001 — IA indisponível nunca derruba o chat
-        return {"mensagem": MSG_SEM_IA, "quick_replies": [],
-                "levantamento": None, "propostas_citadas": []}
+        return _resposta(MSG_SEM_IA)

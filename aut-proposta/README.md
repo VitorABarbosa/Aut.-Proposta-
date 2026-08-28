@@ -42,12 +42,37 @@ python -m scripts.seed_precos
 | `POST /levantamento` | `{"texto"}` | interpreta + precifica (preview, não grava) |
 | `POST /propostas` | `{"texto"}` ou `{"estrutura"}` | grava no NEON, gera `.docx`, sobe no R2 |
 | `GET /propostas/{id}/docx` | — | download direto do `.docx` |
+| `POST /chat` | `{"mensagens"}` | conversa que monta a proposta (stateless) |
 
 Auth: header `Authorization: Bearer $API_TOKEN` em todas menos `/saude`.
+
+## Print no chat
+
+O `content` de uma mensagem pode vir em partes, como na OpenAI, com o print
+anexado em base64:
+
+```json
+{"role": "user", "content": [
+  {"type": "text", "text": "monta a proposta desse e-mail"},
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+]}
+```
+
+O print é lido **uma única vez**: a imagem passa pelas guardas de entrada
+(máx. 5 MB e 4 prints por mensagem, formato conferido pela assinatura do
+arquivo, downscale para 1400 px no maior lado) e vira uma transcrição em texto
+com construtora, empreendimento, A/C, itens e dúvidas. Da segunda rodada em
+diante a transcrição sai do cache e o que segue para o modelo é só texto — o
+front reenvia o histórico inteiro a cada mensagem, e imagem custa caro em
+token. A resposta devolve essa transcrição em `transcricao`, para o front
+poder parar de reenviar o base64.
+
+Item que não casa claramente com o catálogo nunca é chutado numa categoria:
+vai para as dúvidas da transcrição e o chat pergunta.
 
 ## Arquitetura
 
 `app/dominio/` (puro: preços, orçamento, descontos) · `app/db/` (NEON) ·
-`app/historico/` (2º levantamento) · `app/ia/` (parser OpenAI/regex) ·
-`app/docx/` (gerador timbrado) · `app/storage/` (R2) · `app/servicos/`
-(orquestração) · `app/api/` (FastAPI).
+`app/historico/` (2º levantamento) · `app/ia/` (parser OpenAI/regex, chat,
+leitura de print) · `app/docx/` (gerador timbrado) · `app/storage/` (R2) ·
+`app/servicos/` (orquestração) · `app/api/` (FastAPI).

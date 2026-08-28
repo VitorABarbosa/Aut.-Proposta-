@@ -1,10 +1,10 @@
 """Gera o .docx da proposta no modelo oficial Flying Studio (PROPOSTA_EXEMPLO).
 
 Fidelidade run a run ao exemplo: estrutura numerada, textos exatos e os
-destaques inline (negritos em “R00”/“HR”/Frame.io/NID Studio/etc., itálicos,
-sublinhados e as marcações amarelas dos campos do cliente). Os textos ricos
-são listas de segmentos (texto, estilo) com estilo em {'', 'b', 'i', 'u',
-'iu', 'bh'} — b=negrito, i=itálico, u=sublinhado, h=marca-texto amarelo.
+destaques inline (negritos em “R00”/“HR”/Frame.io/NID Studio/etc., itálicos e
+sublinhados). Os textos ricos são listas de segmentos (texto, estilo) com
+estilo em {'', 'b', 'i', 'u', 'iu'} — b=negrito, i=itálico, u=sublinhado. Os
+campos do cliente saem em negrito, sem marca-texto.
 Consome a estrutura de fechar_orcamento e usa o timbrado versionado.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
@@ -182,8 +182,6 @@ def _run(p, texto, *, estilo=""):
     r.bold = "b" in estilo
     r.italic = "i" in estilo
     r.underline = "u" in estilo
-    if "h" in estilo:
-        r.font.highlight_color = WD_COLOR_INDEX.YELLOW
     return r
 
 
@@ -263,13 +261,13 @@ def gerar_docx(
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         _run(p, "FLYING studio", estilo="b")
 
-    # ===== Cabeçalho da proposta (cliente/REF e A/C com marca-texto, como no modelo) =====
+    # ===== Cabeçalho da proposta (cliente/REF e A/C em negrito, sem marca-texto) =====
     p = _par(doc, depois=2)
     _run(p, "PROPOSTA DE IMAGENS, FILMES E TECNOLOGIAS 3D", estilo="b")
     p = _par(doc, depois=2)
-    _run(p, f"{cliente['empresa'].upper()} - REF: {cliente['ref'].upper()}", estilo="bh")
+    _run(p, f"{cliente['empresa'].upper()} - REF: {cliente['ref'].upper()}", estilo="b")
     p = _par(doc, depois=10)
-    _run(p, f"A/C: {cliente['contato'].upper()}", estilo="bh")
+    _run(p, f"A/C: {cliente['contato'].upper()}", estilo="b")
 
     # ===== 1 – Apresentação =====
     _titulo_secao(doc, "1", "APRESENTAÇÃO FLYING STUDIO")
