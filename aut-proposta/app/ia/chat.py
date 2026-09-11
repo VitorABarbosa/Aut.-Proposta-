@@ -21,6 +21,7 @@ import psycopg
 from app.db.repo_precos import carregar_tabela_precos
 from app.db.repo_propostas import listar_propostas, obter_estrutura_de_proposta
 from app.dominio.precos import TabelaPrecos
+from app.empresas import EMISSOR_PADRAO, EMPRESAS, empresa
 from app.ia.leitura_print import em_bloco, transcrever
 from app.ia.visao import MAX_IMAGENS, ImagemInvalida, normalizar_imagem
 from app.servicos.proposta import levantar
@@ -31,14 +32,30 @@ MSG_SEM_IA = ("O chat precisa da IA e ela está indisponível agora — "
               "use a aba 'Texto direto', que funciona sem internet da IA.")
 MAX_RODADAS = 5
 
-TABELAS_PRECOS = ("padrao", "mcmv")
+# Todas as tabelas do grupo. Qual delas vale depende do emissor — quem
+# cruza os dois é `app.empresas.resolver_tabela`.
+TABELAS_PRECOS = tuple(t for emp in EMPRESAS.values() for t in emp.tabelas)
 
-_BASE_PROMPT = """Você é o assistente de propostas da Flying Studio. Tom descontraído,
+_BASE_PROMPT = """Você é o assistente de propostas do Grupo Flying. Tom descontraído,
 direto e simpático, em português. Conduza a conversa para montar uma proposta:
-precisa de construtora/incorporadora (cliente), empreendimento (ref), A/C (quem
-recebe) e os itens — organizados pelas categorias do CATÁLOGO OFICIAL abaixo.
-O usuário pode mandar tudo de uma vez ou aos poucos — pergunte SÓ o que faltar,
-uma coisa por vez.
+precisa de QUAL EMPRESA emite, construtora/incorporadora (cliente),
+empreendimento (ref), A/C (quem recebe) e os itens — organizados pelas
+categorias do CATÁLOGO OFICIAL abaixo. O usuário pode mandar tudo de uma vez ou
+aos poucos — pergunte SÓ o que faltar, uma coisa por vez.
+
+AS TRÊS EMPRESAS (campo `emissor`):
+- flying — Flying Studio: imagens, plantas, filmes 3D, tour virtual, drone e
+  tecnologias interativas (D.sbrave, web touch).
+- rinno — Rinno Films: filmes publicitários (conceito, produto/corretor, viral,
+  institucional, documentário) e takes animados.
+- nid — NID Studio: projeto de interiores, design de fachada, stand de vendas
+  (PDV), apto modelo decorado e desenvolvimento de produto.
+
+O mesmo cliente costuma receber proposta de mais de uma empresa, mas CADA
+PROPOSTA É DE UMA EMPRESA SÓ. Se o pedido misturar serviços de empresas
+diferentes (ex.: imagens + filme da Rinno), avise e pergunte por qual começar —
+depois é só fazer a outra. Use SEMPRE as categorias da empresa escolhida: as da
+Rinno começam com `rinno_` e as da NID com `nid_`.
 
 {catalogo}
 
@@ -70,15 +87,16 @@ como ilustração externa/interna. Vale igual (ou mais) para pedido vindo de
 print, que costuma chegar em linguagem solta e sem quantidade explícita.
 
 MCMV: se o usuário indicar que o empreendimento é Minha Casa Minha Vida
-(MCMV/faixa/raiz), use tabela_precos='mcmv'. Na dúvida, pergunte.
+(MCMV/faixa/raiz), use tabela_precos='mcmv'. Vale só para a Flying; na dúvida,
+pergunte.
 
 REGRAS INEGOCIÁVEIS:
 - Você NUNCA inventa nem calcula preço/valor. Todo número vem das ferramentas.
 - Para precificar (mesmo parcial), chame precificar_proposta com a estrutura no
-  formato: cliente = {{empresa, ref, contato}}; cada categoria do catálogo
-  (nome entre parênteses acima, ex.: externas/internas/plantas/filmes/...) =
-  lista de descrições de itens (uma string por unidade, repita a descrição se
-  houver mais de uma unidade igual).
+  formato: emissor = flying|rinno|nid; cliente = {{empresa, ref, contato}}; cada
+  categoria do catálogo (nome entre parênteses acima, ex.: externas/internas/
+  rinno_filmes/nid_interiores/...) = lista de descrições de itens (uma string
+  por unidade, repita a descrição se houver mais de uma unidade igual).
 - Para consultar propostas antigas, chame listar_propostas_cliente (sem o nome
   do cliente ela devolve as mais recentes de todos).
 - Para copiar uma proposta mudando algo, chame carregar_proposta, ajuste a
@@ -104,23 +122,58 @@ FORMATO DAS RESPOSTAS:
 SYSTEM_PROMPT = _BASE_PROMPT.format(catalogo="CATÁLOGO OFICIAL (única fonte de classificação):")
 
 
-def _montar_system_prompt(tabela: TabelaPrecos) -> str:
-    """Injeta o catálogo oficial (rótulo + descrições, SEM preços) no prompt."""
+def _linhas_do_catalogo(tabela: TabelaPrecos) -> list[str]:
     linhas = []
     for cat in tabela.categorias():
         meta = tabela.meta(cat)
         itens = tabela.dados[cat].get("tabela", [])
         descricoes = "; ".join(item["descricao"] for item in itens)
         linhas.append(f"- {meta['rotulo']} ({cat}): {descricoes}")
-    catalogo = "CATÁLOGO OFICIAL (única fonte de classificação):\n" + "\n".join(linhas)
+    return linhas
+
+
+def _montar_system_prompt(catalogos: dict[str, TabelaPrecos]) -> str:
+    """Injeta o catálogo oficial das três empresas (rótulo + descrições, SEM
+    preços) no prompt, agrupado por empresa — é assim que a IA sabe que
+    `rinno_filmes` é da Rinno e não um item da Flying."""
+    blocos = []
+    for chave, tabela in catalogos.items():
+        emp = empresa(chave)
+        blocos.append(f"{emp.nome} (emissor={chave}):")
+        blocos.extend(f"  {linha}" for linha in _linhas_do_catalogo(tabela))
+    catalogo = ("CATÁLOGO OFICIAL (única fonte de classificação):\n"
+                + "\n".join(blocos))
     return _BASE_PROMPT.format(catalogo=catalogo)
 
 
+def _tabela_unificada(catalogos: dict[str, TabelaPrecos]) -> TabelaPrecos:
+    """Uma TabelaPrecos com as categorias das três empresas, para o que precisa
+    enxergar o grupo inteiro antes de saber o emissor: a leitura de print.
+
+    A ordem recebe um deslocamento por empresa para as categorias não se
+    embaralharem. Nada aqui precifica — precificação é sempre na tabela de uma
+    empresa só, escolhida em `levantar`.
+    """
+    dados: dict = {}
+    for posicao, tabela in enumerate(catalogos.values()):
+        for cat in tabela.categorias():
+            bloco = dict(tabela.dados[cat])
+            bloco["_ordem"] = posicao * 100 + bloco.get("_ordem", 0)
+            dados[cat] = bloco
+    return TabelaPrecos(dados)
+
+
 def _schema_estrutura(categorias: list[str]) -> dict:
-    """Gera o JSON Schema da ferramenta precificar_proposta para as
-    categorias ativas do catálogo (uma propriedade array-de-string por
-    categoria) + tabela_precos (padrao|mcmv)."""
+    """Gera o JSON Schema da ferramenta precificar_proposta para as categorias
+    ativas do catálogo das três empresas (uma propriedade array-de-string por
+    categoria) + emissor e tabela_precos."""
     properties: dict[str, Any] = {
+        "emissor": {
+            "type": "string", "enum": list(EMPRESAS),
+            "description": "Empresa do grupo que emite esta proposta: "
+                           "'flying' (imagens/3D), 'rinno' (filmes) ou "
+                           "'nid' (projeto de interiores).",
+        },
         "cliente": {
             "type": "object",
             "description": "Dados do cliente da proposta.",
@@ -142,13 +195,14 @@ def _schema_estrutura(categorias: list[str]) -> dict:
     properties["estrategia"] = {"type": "string", "enum": ["planilha", "historico"],
                                  "description": "Fonte de preços a usar"}
     properties["tabela_precos"] = {"type": "string", "enum": list(TABELAS_PRECOS),
-                                    "description": "Tabela de preços: 'padrao' ou 'mcmv' "
-                                                   "(Minha Casa Minha Vida)."}
+                                    "description": "Tabela de preços da empresa. Flying: "
+                                                   "'padrao' ou 'mcmv' (Minha Casa Minha "
+                                                   "Vida); Rinno: 'rinno'; NID: 'nid'."}
     return {
         "type": "object",
         "additionalProperties": False,
         "properties": properties,
-        "required": ["cliente"],
+        "required": ["emissor", "cliente"],
     }
 
 
@@ -211,7 +265,7 @@ def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> di
         **{cat: [] for cat in categorias},
         "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
         "mostrar_precos_individuais": False, "_avisos": [],
-        "tabela_precos": "padrao",
+        "emissor": EMISSOR_PADRAO, "tabela_precos": "padrao",
     }
     for chave, valor in bruto.items():
         estrutura[chave] = valor
@@ -233,8 +287,16 @@ def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> di
             itens = []
         estrutura[chave] = [str(item) for item in itens]
 
-    if estrutura.get("tabela_precos") not in TABELAS_PRECOS:
-        estrutura["tabela_precos"] = "padrao"
+    # Emissor e tabela têm de fechar entre si: emissor inválido vira o padrão,
+    # e tabela que não é da empresa escolhida vira a padrão DELA. Sem isso um
+    # 'mcmv' com emissor='rinno' viraria erro de ferramenta no meio da conversa.
+    try:
+        emp = empresa(estrutura.get("emissor"))
+    except ValueError:
+        emp = empresa(EMISSOR_PADRAO)
+    estrutura["emissor"] = emp.chave
+    if estrutura.get("tabela_precos") not in emp.tabelas:
+        estrutura["tabela_precos"] = emp.tabela_padrao
 
     return estrutura
 
@@ -377,9 +439,11 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
     # Catálogo carregado 1x por request, fora do try/except abaixo (que só
     # cobre a conversa com o modelo): falha de banco deve propagar como nas
     # outras rotas, não virar MSG_SEM_IA silenciosamente.
-    tabela = carregar_tabela_precos(conn)
+    catalogos = {chave: carregar_tabela_precos(conn, emp.tabela_padrao)
+                 for chave, emp in EMPRESAS.items()}
+    tabela = _tabela_unificada(catalogos)
     categorias = tabela.categorias()
-    system_prompt = _montar_system_prompt(tabela)
+    system_prompt = _montar_system_prompt(catalogos)
     ferramentas = _ferramentas(categorias)
 
     # Prints viram texto ANTES da conversa: guarda recusada é erro do usuário

@@ -100,6 +100,22 @@ def _formata_descricao(desc_usuario: str, categoria: str, tabela: TabelaPrecos) 
     return prefixo + desc
 
 
+def descricao_final(desc_usuario: str, categoria: str, tabela: TabelaPrecos,
+                    descricao_do_catalogo: str) -> str:
+    """Como o item vai aparecer escrito na proposta.
+
+    Categoria COM prefixo de escrita é imagem: cada cena é diferente ("Fachada
+    vista da calçada"), então o texto do usuário é preservado com o prefixo.
+    Categoria SEM prefixo é serviço de catálogo — filme, tour, projeto de
+    interiores: o nome do serviço é o do catálogo, e não como o usuário
+    escreveu na pressa ("filme corretor" vira "Filme Corretor / Produto de até
+    1:30"). É o que garante que a proposta saia com o nome comercial certo.
+    """
+    if not tabela.meta(categoria)["prefixo"].strip():
+        return descricao_do_catalogo
+    return _formata_descricao(desc_usuario, categoria, tabela)
+
+
 def orcar_pela_planilha(
     descricoes: dict[str, list[str]],
     tabela: TabelaPrecos | None = None,
@@ -115,7 +131,8 @@ def orcar_pela_planilha(
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
-                    descricao_normalizada=_formata_descricao(desc, cat, tabela),
+                    descricao_normalizada=descricao_final(
+                        desc, cat, tabela, classif["descricao_padrao"]),
                     preco=classif["preco"],
                     fonte=f"planilha:{classif['chave']}",
                 )

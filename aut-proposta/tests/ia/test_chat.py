@@ -130,7 +130,9 @@ def test_schema_estrutura_contem_categorias_dinamicas():
         "description": "Descrições dos itens da categoria 'filmes', uma entrada por unidade.",
     }
     assert "tecnologia" in schema["properties"]
-    assert schema["properties"]["tabela_precos"]["enum"] == ["padrao", "mcmv"]
+    assert schema["properties"]["tabela_precos"]["enum"] == ["padrao", "mcmv", "rinno", "nid"]
+    assert schema["properties"]["emissor"]["enum"] == ["flying", "rinno", "nid"]
+    assert schema["required"] == ["emissor", "cliente"]
     assert schema["additionalProperties"] is False
 
 
@@ -144,6 +146,31 @@ def test_completar_estrutura_tabela_precos_invalida_vira_padrao():
     assert est["tabela_precos"] == "padrao"
 
 
+def test_emissor_default_e_flying():
+    est = chat._completar_estrutura({"cliente": "GALLI"})
+    assert est["emissor"] == "flying" and est["tabela_precos"] == "padrao"
+
+
+def test_emissor_traz_a_tabela_da_propria_empresa():
+    for emissor, tabela in (("rinno", "rinno"), ("nid", "nid")):
+        est = chat._completar_estrutura({"cliente": "OUSY", "emissor": emissor})
+        assert est["emissor"] == emissor
+        assert est["tabela_precos"] == tabela
+
+
+def test_tabela_de_outra_empresa_nao_gruda_no_emissor():
+    """mcmv é da Flying: pedida com emissor rinno, cai na tabela da Rinno em
+    vez de virar erro de ferramenta no meio da conversa."""
+    est = chat._completar_estrutura({"cliente": "OUSY", "emissor": "rinno",
+                                     "tabela_precos": "mcmv"})
+    assert est["emissor"] == "rinno" and est["tabela_precos"] == "rinno"
+
+
+def test_emissor_invalido_vira_flying():
+    est = chat._completar_estrutura({"cliente": "GALLI", "emissor": "disney"})
+    assert est["emissor"] == "flying" and est["tabela_precos"] == "padrao"
+
+
 def test_completar_estrutura_categorias_dinamicas():
     est = chat._completar_estrutura({"filmes": ["Filme institucional"]}, ["filmes", "tecnologia"])
     assert est["filmes"] == ["Filme institucional"]
@@ -155,11 +182,18 @@ def test_montar_system_prompt_traz_catalogo_e_regra_rigidez(db):
     aplicar_schema(db)
     semear_precos(db)
     from app.db.repo_precos import carregar_tabela_precos
-    tabela = carregar_tabela_precos(db)
-    prompt = chat._montar_system_prompt(tabela)
+    from app.empresas import EMPRESAS
+    catalogos = {chave: carregar_tabela_precos(db, emp.tabela_padrao)
+                 for chave, emp in EMPRESAS.items()}
+    prompt = chat._montar_system_prompt(catalogos)
     assert "REGRA DE RIGIDEZ" in prompt
     assert "Tecnologias Interativas" in prompt
     assert "MCMV" in prompt
+    # As três empresas, cada uma com o seu catálogo e o seu emissor.
+    for nome, emissor in (("FLYING STUDIO", "flying"), ("RINNO FILMS", "rinno"),
+                          ("NID STUDIO", "nid")):
+        assert f"{nome} (emissor={emissor}):" in prompt
+    assert "rinno_filmes" in prompt and "nid_interiores" in prompt
     # Sem preços no catálogo injetado no prompt.
     assert "22800" not in prompt and "R$" not in prompt
 

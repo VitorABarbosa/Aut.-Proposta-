@@ -253,3 +253,46 @@ def test_chat_endpoint_saudacao(cliente_api):
     r = cliente_api.post("/chat", json={"mensagens": []}, headers=HEAD)
     assert r.status_code == 200
     assert "Oi, tudo bem?" in r.json()["mensagem"]
+
+
+# ---------- multi-empresa ----------
+
+ESTRUTURA_RINNO = {
+    "cliente": {"empresa": "OUSY", "ref": "Vila Mariana", "contato": "Yuri"},
+    "emissor": "rinno",
+    "rinno_filmes": ["Filme conceito"],
+    "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+    "mostrar_precos_individuais": False, "_avisos": [],
+}
+
+
+def test_levantamento_devolve_o_emissor(cliente_api):
+    r = cliente_api.post("/levantamento", json={"estrutura": ESTRUTURA_RINNO}, headers=HEAD)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["emissor"] == "rinno"
+    assert corpo["fechado"]["financeiro"]["total"] == 14000.0
+
+
+def test_texto_direto_aceita_a_empresa_no_corpo(cliente_api):
+    r = cliente_api.post("/levantamento",
+                         json={"texto": TEXTO, "emissor": "nid"}, headers=HEAD)
+    assert r.status_code == 200
+    assert r.json()["emissor"] == "nid"
+
+
+def test_emissor_invalido_e_422(cliente_api):
+    r = cliente_api.post("/levantamento",
+                         json={"estrutura": ESTRUTURA_RINNO | {"emissor": "disney"}},
+                         headers=HEAD)
+    assert r.status_code == 422
+    assert "emissor inválido" in r.json()["detail"]
+
+
+def test_propostas_listadas_trazem_a_empresa(cliente_api):
+    gerada = cliente_api.post("/propostas", json={"estrutura": ESTRUTURA_RINNO}, headers=HEAD)
+    assert gerada.status_code == 200
+    assert gerada.json()["emissor"] == "rinno"
+
+    listadas = cliente_api.get("/propostas", headers=HEAD).json()["propostas"]
+    assert listadas[0]["emissor"] == "rinno"

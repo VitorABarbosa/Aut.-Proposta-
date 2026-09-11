@@ -1,5 +1,6 @@
 -- Tabela de preços (fonte da verdade em runtime; semeada do JSON)
--- Cada categoria pertence a uma `tabela` de preços ("padrao" ou "mcmv").
+-- Cada categoria pertence a uma `tabela` de preços: "padrao"/"mcmv" (Flying),
+-- "rinno" (Rinno Films) e "nid" (NID Studio).
 CREATE TABLE IF NOT EXISTS preco_categoria (
     tabela            text NOT NULL DEFAULT 'padrao',
     categoria         text NOT NULL,
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS propostas (
     desconto_valor  numeric(12,2) NOT NULL DEFAULT 0,
     total           numeric(12,2) NOT NULL,
     docx_url        text,
+    emissor         text NOT NULL DEFAULT 'flying',
     tabela_precos   text NOT NULL DEFAULT 'padrao',
     criado_em       timestamptz NOT NULL DEFAULT now()
 );
@@ -87,3 +89,12 @@ ALTER TABLE preco_item ADD CONSTRAINT preco_item_tabela_categoria_fkey
     FOREIGN KEY (tabela, categoria) REFERENCES preco_categoria (tabela, categoria) ON DELETE CASCADE;
 
 ALTER TABLE propostas ADD COLUMN IF NOT EXISTS tabela_precos text NOT NULL DEFAULT 'padrao';
+
+-- Multi-empresa: qual das três empresas do grupo (flying/rinno/nid) emite a
+-- proposta. Proposta gravada antes disso é da Flying — o DEFAULT já resolve a
+-- coluna nova, e o UPDATE abaixo corrige as que foram feitas na tabela mcmv
+-- (também Flying) ou em qualquer tabela de outra empresa, caso o banco já
+-- tenha recebido dados novos antes desta migração rodar.
+ALTER TABLE propostas ADD COLUMN IF NOT EXISTS emissor text NOT NULL DEFAULT 'flying';
+UPDATE propostas SET emissor = 'rinno' WHERE tabela_precos = 'rinno' AND emissor = 'flying';
+UPDATE propostas SET emissor = 'nid'   WHERE tabela_precos = 'nid'   AND emissor = 'flying';

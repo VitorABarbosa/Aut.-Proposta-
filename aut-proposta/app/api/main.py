@@ -50,6 +50,8 @@ def verificar_token(request: Request) -> None:
 class CorpoLevantamento(BaseModel):
     texto: str | None = None
     estrutura: dict | None = None
+    # Só vale no caminho `texto` — com `estrutura`, o emissor vem dentro dela.
+    emissor: str | None = None
 
     @model_validator(mode="after")
     def _um_dos_dois(self):
@@ -61,6 +63,7 @@ class CorpoLevantamento(BaseModel):
 class CorpoProposta(BaseModel):
     texto: str | None = None
     estrutura: dict | None = None
+    emissor: str | None = None
 
     @model_validator(mode="after")
     def _um_dos_dois(self):
@@ -105,7 +108,7 @@ def rota_levantamento(corpo: CorpoLevantamento):
     conn = _abrir_conn()
     try:
         estrutura = (corpo.estrutura if corpo.estrutura is not None
-                     else parse_texto(conn, corpo.texto))
+                     else parse_texto(conn, corpo.texto, corpo.emissor))
         lev = levantar(conn, estrutura)
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
@@ -115,6 +118,7 @@ def rota_levantamento(corpo: CorpoLevantamento):
         "estrutura": estrutura,
         "fechado": lev["fechado"],
         "estrategia_usada": lev["estrategia_usada"],
+        "emissor": lev["emissor"],
         "avisos": lev["avisos"],
         "pendencias": _pendencias(estrutura, lev["fechado"]),
     }
@@ -125,7 +129,7 @@ def rota_gerar(corpo: CorpoProposta):
     conn = _abrir_conn()
     try:
         estrutura = (corpo.estrutura if corpo.estrutura is not None
-                     else parse_texto(conn, corpo.texto))
+                     else parse_texto(conn, corpo.texto, corpo.emissor))
         out = gerar(conn, estrutura, _dir_saida())
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
@@ -136,6 +140,7 @@ def rota_gerar(corpo: CorpoProposta):
         "docx_url": out["docx_url"],
         "download": f"/propostas/{out['proposta_id']}/docx",
         "fechado": out["fechado"],
+        "emissor": out["emissor"],
         "avisos": out["avisos"],
     }
 
