@@ -74,15 +74,16 @@ def test_rinno_traz_o_escopo_de_cada_filme(tmp_path):
 
     assert "1  – APRESENTAÇÃO RINNO FILMS: NASCE O CINEMA IMOBILIÁRIO." in texto
     # Itens numerados um a um, com o escopo logo abaixo.
-    assert "2.1 Filme Conceito de até 2:30 (Dois Minutos e Meio)" in texto
-    assert "2.2 Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)" in texto
+    assert "2.1 Um Filme Conceito de até 2:30 (Dois Minutos e Meio)" in texto
+    assert "2.2 Um Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)" in texto
     assert texto.count("Este item inclui:") == 2
     assert "Takes animados para redes sociais e mobile" in texto  # escopo do conceito
     assert "Estrutura: Filme corretor." in texto                  # escopo do produto
     # Take não tem escopo cadastrado: sai só a linha, sem herdar o de filme.
     assert "2.3 Take I.A. Animado de até 12 segundos" in texto
     # Investimento e pagamento em seção própria, como no modelo da Rinno.
-    assert "3.1 INVESTIMENTO" in texto and "3.2 FORMA DE PAGAMENTO:" in texto
+    assert "3.1 Investimentos da Produção Técnica dos Filmes Acima" in texto
+    assert "3.2 FORMA DE PAGAMENTO:" in texto
     assert "4  – PRAZOS / CRONOGRAMAS:" in texto
 
 
@@ -169,7 +170,7 @@ def test_institucional_com_duracao_do_usuario_ainda_ganha_o_escopo(tmp_path):
                          [("Filme institucional de até 2:00", 15000)])])
     saida = gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", data=DATA, emissor="rinno")
     texto = _texto(saida)
-    assert "2.1 Filme institucional de até 2:00" in texto
+    assert "2.1 Um Filme institucional de até 2:00" in texto
     assert "Este item inclui:" in texto
     assert "Roteiro: Roteiro Cliente" in texto
     assert "Estrutura:" not in texto
@@ -185,3 +186,37 @@ def test_cortesia_sai_como_palavra_e_nao_como_zero(tmp_path):
     assert "CORTESIA" in texto
     assert "R$ 0,00" not in texto
     assert "Valor bruto" not in texto
+
+
+def test_rinno_segue_o_modelo_oficial_em_word(tmp_path):
+    """Rinno_Cliente_Projeto_AnexoI_R00.docx: valor por extenso, 50/50,
+    subtítulo próprio do investimento, viral sem 'Este item inclui:' e a
+    redação oficial de Arquivos-fonte."""
+    fechado = _fechado([("rinno_filmes", "Filmes", [
+        ("Filme Conceito de até 2:30 (Dois Minutos e Meio)", 14000),
+        ("Filme Viral de até 1:00 (Um Minuto) — formato 9:16", 4500),
+    ])])
+    saida = gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", data=DATA, emissor="rinno")
+    texto = _texto(saida)
+
+    assert "3.1 Investimentos da Produção Técnica dos Filmes Acima" in texto
+    assert "R$ 18.500,00 (Dezoito Mil, e Quinhentos Reais)" in texto or \
+           "R$ 18.500,00 (Dezoito Mil e Quinhentos Reais)" in texto or \
+           "R$ 18.500,00 (Dezoito Mil, Quinhentos Reais)" in texto
+    assert "50% – Na aprovação desta Proposta (R$9.250,00)" in texto
+    assert "50% – Na Entrega dos Filmes (R$9.250,00)" in texto
+    assert "25%" not in texto.split("3.2 FORMA DE PAGAMENTO:")[1].split("4  –")[0]
+    # Conceito tem lista; viral tem uma linha só e vem direto.
+    assert texto.count("Este item inclui:") == 1
+    assert "Conteúdo: Um filme para redes sociais" in texto
+    assert "arquivos de renderização e demais arquivos editáveis" in texto
+    assert "uso exclusivo do lançamento pertinente à contratação" in texto
+
+
+def test_investimento_sai_por_extenso_nas_tres(tmp_path):
+    for emissor, fechado in (("flying", FECHADO_FLYING), ("nid", FECHADO_NID)):
+        saida = gerar_docx(CLIENTE, fechado, tmp_path / f"{emissor}.docx", data=DATA, emissor=emissor)
+        texto = _texto(saida)
+        assert "(" in texto.split("INVESTIMENTO PARA O DESENVOLVIMENTOS")[1].split("\n")[1]
+    texto = _texto(gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "f.docx", data=DATA, emissor="flying"))
+    assert "R$ 3.000,00 (Três Mil Reais)" in texto

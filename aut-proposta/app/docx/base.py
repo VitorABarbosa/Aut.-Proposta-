@@ -18,7 +18,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Emu, Pt, RGBColor
 
-from app.docx.formatos import brl, data_extenso
+from app.docx.formatos import brl, data_extenso, extenso
 from app.empresas import Empresa
 
 TIMBRADO_DIR = Path(__file__).resolve().parent / "timbrado"
@@ -161,18 +161,23 @@ def cabecalho_proposta(doc, empresa: Empresa, cliente: dict[str, str]) -> None:
     _run(p, f"A/C: {cliente['contato'].upper()}", estilo="b")
 
 
-def bloco_investimento(doc, numero: str, fin: dict) -> None:
-    """Valor fechado da proposta, com a linha de desconto quando houver.
+def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -> None:
+    """Valor fechado da proposta, por extenso como nos modelos oficiais
+    ("R$ 59.000,00 (Cinquenta e Nove Mil Reais)"), com a linha de desconto
+    quando houver.
 
     "DESENVOLVIMENTOS" no plural é como está no modelo oficial das três
     empresas — não é erro de digitação daqui.
     """
-    _subtitulo(doc, f"{numero} INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:")
+    _subtitulo(doc, f"{numero} {titulo or 'INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:'}")
     p = _par(doc, depois=2, recuo=1.25)
     # Proposta de cortesia (100% de desconto): o item mostra o valor, e o
     # investimento sai como a Rinno faz — a palavra, não "R$ 0,00".
     cortesia = fin["total"] == 0 and fin["subtotal"] > 0
-    _run(p, "CORTESIA" if cortesia else brl(fin["total"]).replace("R$", "R$ "), estilo="b" if cortesia else "")
+    if cortesia:
+        _run(p, "CORTESIA", estilo="b")
+    else:
+        _run(p, f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
     if fin["desconto_pct"] > 0 and not cortesia:
         rotulo = fin["rotulo"] or f"{fin['desconto_pct']}%"
         p = _par(doc, depois=8, recuo=1.25)

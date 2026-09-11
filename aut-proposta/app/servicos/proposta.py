@@ -14,9 +14,17 @@ from app.db.repo_precos import carregar_tabela_precos
 from app.db.repo_propostas import atualizar_docx_url, salvar_proposta, upsert_cliente
 from app.docx.gerador import gerar_docx
 from app.dominio.descontos import Desconto
-from app.dominio.orcamento import fechar_orcamento, orcar_pela_planilha
+from app.dominio.orcamento import (
+    CategoriaOrcada,
+    ItemOrcado,
+    Orcamento,
+    entrada_de_item,
+    fechar_orcamento,
+    orcar_pela_planilha,
+)
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
+from app.empresas import EMISSORES
 from app.empresas import empresa as empresa_emissora
 from app.empresas import resolver_tabela
 from app.historico.historico import Historico
@@ -69,6 +77,32 @@ def no_namespace_do_emissor(estrutura: dict[str, Any], emissor: str,
     return saida
 
 
+def _rotulo_de(cat: str) -> str:
+    """'rinno_filmes' -> 'Filmes'; 'tecnologia' -> 'Tecnologia'."""
+    nome = cat
+    for emissor in EMISSORES:
+        if nome.startswith(f"{emissor}_"):
+            nome = nome[len(emissor) + 1:]
+    return nome.replace("_", " ").strip().capitalize()
+
+
+def _acrescentar_fora_da_tabela(orc: Orcamento, fora: dict[str, list]) -> None:
+    """Categorias que a tabela não tem entram no orçamento com os itens que a
+    pessoa pediu: preço informado, ou zero (a pendência pede o valor)."""
+    for cat, itens in fora.items():
+        bloco = orc.categorias.setdefault(cat, CategoriaOrcada(nome=cat, rotulo=_rotulo_de(cat)))
+        for entrada in itens:
+            desc, informado = entrada_de_item(entrada)
+            if not desc:
+                continue
+            bloco.itens.append(ItemOrcado(
+                descricao=desc,
+                descricao_normalizada=desc[:1].upper() + desc[1:],
+                preco=informado if informado is not None else 0,
+                fonte="informado" if informado is not None else "sem_tabela",
+            ))
+
+
 def _inteiro_ou_none(valor: Any) -> int | None:
     try:
         return int(round(float(valor))) if valor not in (None, "", 0, "0") else None
@@ -84,6 +118,16 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     tabela_precos = resolver_tabela(emissor, estrutura.get("tabela_precos"))
 
     tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
+    if not tabela.categorias():
+        # Aconteceu em produção: o backend subiu sem o seed e a Rinno saiu
+        # zerada. A tabela é base, não verdade absoluta: sem ela os itens
+        # entram do mesmo jeito, com o preço que a pessoa informar — e o aviso
+        # diz o que falta no banco.
+        avisos.append(
+            f"O catálogo da {empresa_emissora(emissor).nome} não está carregado no banco "
+            f"(tabela '{tabela_precos}' vazia) — informe os preços à mão ou rode "
+            "`python -m scripts.seed_precos` com o DATABASE_URL de produção."
+        )
     estrutura = no_namespace_do_emissor(estrutura, emissor, tabela.categorias())
     descricoes = _descricoes(estrutura, tabela.categorias())
 
@@ -93,15 +137,20 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         raise ValueError(f"preco_por_imagem inválido: {preco_por_imagem} (deve ser >= 0)")
     if not -100 < ajuste_pct < 1000:
         raise ValueError(f"ajuste_planilha_pct inválido: {ajuste_pct}")
-    # Itens de categorias fora da tabela escolhida (ex.: tecnologia no mcmv)
-    # não podem evaporar sem sinal — o usuário decide trocar de tabela ou remover.
-    for cat, itens in estrutura.items():
-        if (cat not in tabela.categorias() and isinstance(itens, list) and itens
-                and not cat.startswith("_")):
-            avisos.append(
-                f"Categoria '{cat}' não existe na tabela {tabela_precos} — "
-                f"{len(itens)} item(ns) não precificado(s)."
-            )
+    # Itens de categorias fora da tabela escolhida (tecnologia no mcmv, ou
+    # qualquer coisa quando a tabela está vazia) entram mesmo assim: com o
+    # preço informado, ou zerados e com pendência para a pessoa preencher. A
+    # tabela sugere preço; não decide o que pode estar na proposta.
+    fora_da_tabela = {
+        cat: itens for cat, itens in estrutura.items()
+        if cat not in tabela.categorias() and isinstance(itens, list) and itens
+        and not cat.startswith("_")
+    }
+    for cat, itens in fora_da_tabela.items():
+        avisos.append(
+            f"Categoria '{cat}' não está na tabela {tabela_precos} — "
+            f"{len(itens)} item(ns) sem preço de tabela; informe o valor."
+        )
     cliente = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
 
@@ -115,6 +164,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     if orc is None:
         orc = orcar_pela_planilha(descricoes, tabela, ajuste_pct=ajuste_pct,
                                   preco_por_imagem=preco_por_imagem)
+    _acrescentar_fora_da_tabela(orc, fora_da_tabela)
 
     desconto = None
     if estrutura.get("desconto_pct", 0):

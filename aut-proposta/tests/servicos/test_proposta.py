@@ -200,7 +200,9 @@ def test_categoria_fora_da_tabela_gera_aviso(db):
     est["tecnologia"] = ["Aplicativo touch para o stand"]
     out = svc.levantar(db, est)
     assert any("tecnologia" in a and "mcmv" in a for a in out["avisos"])
-    assert any("1 item(ns) não precificado" in a for a in out["avisos"])
+    assert any("1 item(ns) sem preço de tabela" in a for a in out["avisos"])
+    # E o item não some: entra zerado, para a pessoa informar o valor.
+    assert out["fechado"]["orcamento"]["tecnologia"]["itens"][0]["fonte"] == "sem_tabela"
 
 
 # ---------- multi-empresa ----------
@@ -323,7 +325,9 @@ def test_remap_nunca_cruza_de_uma_empresa_para_outra(db):
     _prep(db)
     est = _estrutura() | {"rinno_filmes": ["Filme conceito"]}
     out = svc.levantar(db, est)
-    assert any("rinno_filmes" in a and "não existe" in a for a in out["avisos"])
+    assert any("rinno_filmes" in a and "não está na tabela" in a for a in out["avisos"])
+    # Entra zerado, pendente — não some.
+    assert out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]["preco"] == 0
 
 
 def test_no_namespace_do_emissor_junta_com_o_que_ja_existia():
@@ -450,3 +454,37 @@ def test_preco_informado_negativo_e_erro(db):
     _prep(db)
     with pytest.raises(ValueError, match="preço informado inválido"):
         svc.levantar(db, _estrutura() | {"externas": [{"descricao": "Fachada", "preco": -1}]})
+
+
+# ---------- catálogo vazio no banco (o que aconteceu em produção) ----------
+
+
+def test_tabela_vazia_no_banco_nao_bloqueia_e_aceita_o_preco_dito(db):
+    """Backend subiu sem o seed em produção. A tabela é base, não verdade
+    absoluta: o item entra com o preço que a pessoa disse ("viral por 4 mil"),
+    e o que ela não disse fica pendente — mais o aviso do seed."""
+    aplicar_schema(db)  # schema sim, seed não
+    est = _estrutura_rinno() | {
+        "rinno_filmes": [{"descricao": "Filme viral", "preco": 4000}, "Filme conceito"],
+        "rinno_takes": [],
+    }
+    out = svc.levantar(db, est)
+
+    itens = out["fechado"]["orcamento"]["rinno_filmes"]["itens"]
+    assert itens[0]["preco"] == 4000 and itens[0]["fonte"] == "informado"
+    assert itens[1]["preco"] == 0 and itens[1]["fonte"] == "sem_tabela"
+    assert out["fechado"]["financeiro"]["total"] == 4000.0
+    assert any("não está carregado no banco" in a and "seed_precos" in a for a in out["avisos"])
+    from app.api.main import _pendencias
+    assert "'Filme conceito' está sem preço — informe o valor." in _pendencias(out["estrutura"], out["fechado"])
+
+
+def test_categoria_fora_da_tabela_entra_com_o_preco_informado(db):
+    """Tecnologia não existe no mcmv, mas o cliente pediu e o valor foi dito."""
+    _prep(db)
+    est = _estrutura() | {"tabela_precos": "mcmv",
+                          "tecnologia": [{"descricao": "App touch para o stand", "preco": 20000}]}
+    out = svc.levantar(db, est)
+    tec = out["fechado"]["orcamento"]["tecnologia"]
+    assert tec["total"] == 20000 and tec["itens"][0]["fonte"] == "informado"
+    assert {"nome": "tecnologia", "rotulo": "Tecnologia"} in out["fechado"]["orcamento"]["_categorias"]
