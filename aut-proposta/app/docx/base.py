@@ -169,8 +169,11 @@ def bloco_investimento(doc, numero: str, fin: dict) -> None:
     """
     _subtitulo(doc, f"{numero} INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:")
     p = _par(doc, depois=2, recuo=1.25)
-    _run(p, brl(fin["total"]).replace("R$", "R$ "))
-    if fin["desconto_pct"] > 0:
+    # Proposta de cortesia (100% de desconto): o item mostra o valor, e o
+    # investimento sai como a Rinno faz — a palavra, não "R$ 0,00".
+    cortesia = fin["total"] == 0 and fin["subtotal"] > 0
+    _run(p, "CORTESIA" if cortesia else brl(fin["total"]).replace("R$", "R$ "), estilo="b" if cortesia else "")
+    if fin["desconto_pct"] > 0 and not cortesia:
         rotulo = fin["rotulo"] or f"{fin['desconto_pct']}%"
         p = _par(doc, depois=8, recuo=1.25)
         _run(p, f"(Valor bruto: {brl(fin['subtotal'])}  ·  Desconto ({rotulo}): "

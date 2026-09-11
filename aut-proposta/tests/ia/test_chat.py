@@ -125,10 +125,12 @@ def test_cliente_string_vira_objeto():
 
 def test_schema_estrutura_contem_categorias_dinamicas():
     schema = chat._schema_estrutura(["externas", "internas", "plantas", "filmes", "tecnologia"])
-    assert schema["properties"]["filmes"] == {
-        "type": "array", "items": {"type": "string"},
-        "description": "Descrições dos itens da categoria 'filmes', uma entrada por unidade.",
-    }
+    filmes = schema["properties"]["filmes"]
+    assert filmes["type"] == "array" and filmes["items"] == {"type": "string"}
+    # A descrição diz de quem é a categoria: foi `filmes` com emissor rinno que
+    # deixou a proposta da Archtech sem preço.
+    assert filmes["description"].startswith("[FLYING STUDIO]")
+    assert "emissor='flying'" in filmes["description"]
     assert "tecnologia" in schema["properties"]
     assert schema["properties"]["tabela_precos"]["enum"] == ["padrao", "mcmv", "rinno", "nid"]
     assert schema["properties"]["emissor"]["enum"] == ["flying", "rinno", "nid"]
@@ -394,3 +396,18 @@ def test_conversa_sem_print_segue_igual(db, monkeypatch):
     out = chat.responder(db, [{"role": "user", "content": "proposta pra GALLI"}])
     assert vistas[0][-1] == {"role": "user", "content": "proposta pra GALLI"}
     assert out["transcricao"] is None
+
+
+def test_categoria_da_rinno_e_da_nid_dizem_de_quem_sao():
+    schema = chat._schema_estrutura(["filmes", "rinno_filmes", "nid_pdv"])
+    assert schema["properties"]["rinno_filmes"]["description"].startswith("[RINNO FILMS]")
+    assert "emissor='rinno'" in schema["properties"]["rinno_filmes"]["description"]
+    assert schema["properties"]["nid_pdv"]["description"].startswith("[NID STUDIO]")
+
+
+def test_schema_tem_ajuste_e_preco_por_imagem():
+    schema = chat._schema_estrutura(["externas"])
+    assert schema["properties"]["ajuste_planilha_pct"]["type"] == "number"
+    assert schema["properties"]["preco_por_imagem"]["type"] == ["number", "null"]
+    est = chat._completar_estrutura({"cliente": "GALLI"})
+    assert est["ajuste_planilha_pct"] == 0 and est["preco_por_imagem"] is None

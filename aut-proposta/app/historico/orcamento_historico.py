@@ -11,6 +11,7 @@ from app.dominio.orcamento import (
     ItemOrcado,
     Orcamento,
     descricao_final,
+    e_categoria_de_imagem,
 )
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
@@ -22,6 +23,7 @@ def orcar_pelo_historico(
     cliente: str,
     descricoes: dict[str, list[str]],
     tabela: TabelaPrecos,
+    preco_por_imagem: int | None = None,
 ) -> Orcamento | None:
     if not historico.tem_cliente(cliente):
         return None
@@ -60,6 +62,11 @@ def orcar_pelo_historico(
             if preco is None:
                 preco = classif["preco"]
                 fonte = f"fallback_planilha:{classif['chave']}"
+
+            # Preço fechado por imagem passa por cima de tudo, histórico incluído:
+            # é o número que o cliente aceitou desta vez.
+            if preco_por_imagem is not None and e_categoria_de_imagem(cat, tabela):
+                preco, fonte = int(preco_por_imagem), "fixo_por_imagem"
 
             cats[cat].itens.append(
                 ItemOrcado(

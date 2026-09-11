@@ -54,8 +54,22 @@ AS TRÊS EMPRESAS (campo `emissor`):
 O mesmo cliente costuma receber proposta de mais de uma empresa, mas CADA
 PROPOSTA É DE UMA EMPRESA SÓ. Se o pedido misturar serviços de empresas
 diferentes (ex.: imagens + filme da Rinno), avise e pergunte por qual começar —
-depois é só fazer a outra. Use SEMPRE as categorias da empresa escolhida: as da
-Rinno começam com `rinno_` e as da NID com `nid_`.
+depois é só fazer a outra.
+
+CATEGORIA CERTA PARA A EMPRESA CERTA: cada categoria do catálogo pertence a UMA
+empresa (o nome dela está no cabeçalho de cada bloco abaixo). Com emissor=rinno,
+filme vai em `rinno_filmes` — NUNCA em `filmes`, que é o filme 3D da Flying.
+Com emissor=nid, use só `nid_*`. Filme institucional, conceito, produto,
+corretor, viral e documentário são SEMPRE da Rinno.
+
+PREÇO FORA DA PLANILHA (dois campos, os dois em código, nunca calculados por
+você):
+- `ajuste_planilha_pct`: "planilha mais 10%", "com 10% em cima", "cliente novo"
+  → 10; "planilha menos 5%" → -5. Entra no preço de cada item e NÃO aparece na
+  proposta. É diferente de desconto, que aparece como linha.
+- `preco_por_imagem`: "2.400 por imagem", "média de 2.200 a imagem", "mesmo
+  valor por imagem do projeto anterior" → o número. Vale para todas as
+  perspectivas e plantas; não mexe em filme, tour ou tecnologia.
 
 {catalogo}
 
@@ -186,12 +200,26 @@ def _schema_estrutura(categorias: list[str]) -> dict:
         },
     }
     for cat in categorias:
+        dona = _empresa_da_categoria(cat)
         properties[cat] = {
             "type": "array", "items": {"type": "string"},
-            "description": f"Descrições dos itens da categoria '{cat}', uma entrada por unidade.",
+            "description": f"[{dona}] Descrições dos itens da categoria '{cat}', uma entrada "
+                           f"por unidade. Use SÓ com emissor='{_emissor_da_categoria(cat)}'.",
         }
-    properties["desconto_pct"] = {"type": "number", "description": "Percentual de desconto (0 se não houver)"}
+    properties["desconto_pct"] = {"type": "number", "description": "Percentual de desconto (0 se não houver). Aparece na proposta como linha de desconto."}
     properties["desconto_label"] = {"type": ["string", "null"], "description": "Rótulo do desconto, se houver"}
+    properties["ajuste_planilha_pct"] = {
+        "type": "number",
+        "description": "Ajuste sobre a tabela, em %, aplicado no preço de cada item e INVISÍVEL "
+                       "na proposta: 'planilha + 10%' (cliente novo) = 10; 'planilha - 5%' = -5. "
+                       "0 se não houver. Não confundir com desconto.",
+    }
+    properties["preco_por_imagem"] = {
+        "type": ["number", "null"],
+        "description": "Preço fixo por imagem, em reais, quando o cliente fecha um valor único "
+                       "para todas as perspectivas e plantas (ex.: 'R$ 2.400 a imagem'). "
+                       "null se não houver. Só afeta categorias de imagem.",
+    }
     properties["estrategia"] = {"type": "string", "enum": ["planilha", "historico"],
                                  "description": "Fonte de preços a usar"}
     properties["tabela_precos"] = {"type": "string", "enum": list(TABELAS_PRECOS),
@@ -204,6 +232,18 @@ def _schema_estrutura(categorias: list[str]) -> dict:
         "properties": properties,
         "required": ["emissor", "cliente"],
     }
+
+
+def _emissor_da_categoria(cat: str) -> str:
+    """Rinno e NID têm prefixo; o resto é Flying."""
+    for chave in EMPRESAS:
+        if chave != EMISSOR_PADRAO and cat.startswith(f"{chave}_"):
+            return chave
+    return EMISSOR_PADRAO
+
+
+def _empresa_da_categoria(cat: str) -> str:
+    return empresa(_emissor_da_categoria(cat)).nome
 
 
 def _ferramentas(categorias: list[str]) -> list[dict]:
@@ -264,6 +304,7 @@ def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> di
         "cliente": {"empresa": "CLIENTE", "ref": "", "contato": ""},
         **{cat: [] for cat in categorias},
         "desconto_pct": 0, "desconto_label": None, "estrategia": "planilha",
+        "ajuste_planilha_pct": 0, "preco_por_imagem": None,
         "mostrar_precos_individuais": False, "_avisos": [],
         "emissor": EMISSOR_PADRAO, "tabela_precos": "padrao",
     }
@@ -307,6 +348,7 @@ def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict,
     if nome == "precificar_proposta":
         estrutura = _completar_estrutura(args.get("estrutura"), categorias)
         lev = levantar(conn, estrutura)
+        estrutura = lev["estrutura"]  # já no namespace do emissor (filmes -> rinno_filmes)
         from app.api.main import _pendencias  # mesma regra de pendências da API
         lev_out = {
             "estrutura": estrutura,

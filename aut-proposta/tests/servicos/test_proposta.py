@@ -291,3 +291,106 @@ def test_gerar_da_nid_escreve_o_docx_da_nid(db, tmp_path, monkeypatch):
     texto = "\n".join(p.text for p in Document(out["docx_path"]).paragraphs)
     assert texto.startswith("NID STUDIO – SEU NINHO CRIATIVO")
     assert "Lâmina 07: Planta de Construir e Demolir" in texto
+
+
+# ---------- o caso da Archtech: categoria da Flying com emissor rinno ----------
+
+
+def test_filme_em_categoria_da_flying_com_emissor_rinno_e_precificado(db):
+    """Foi o teste real que falhou: a IA mandou `filmes` (Flying) com emissor
+    rinno e a proposta saiu sem preço, com aviso de categoria inexistente."""
+    _prep(db)
+    est = {
+        "cliente": {"empresa": "Archtech", "ref": "Consolação", "contato": "Francisco"},
+        "emissor": "rinno",
+        "filmes": ["Filme institucional"],
+        "desconto_pct": 0.0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    out = svc.levantar(db, est)
+
+    assert out["fechado"]["orcamento"]["rinno_filmes"]["total"] == 18000
+    assert out["fechado"]["financeiro"]["total"] == 18000.0
+    assert not any("não existe" in a for a in out["avisos"])
+    # E a estrutura devolvida já está no namespace certo, para o preview.
+    assert out["estrutura"]["rinno_filmes"] == ["Filme institucional"]
+    assert "filmes" not in out["estrutura"]
+
+
+def test_remap_nunca_cruza_de_uma_empresa_para_outra(db):
+    """`rinno_filmes` com emissor flying não vira `filmes`: são produtos
+    diferentes. Fica o aviso, como antes."""
+    _prep(db)
+    est = _estrutura() | {"rinno_filmes": ["Filme conceito"]}
+    out = svc.levantar(db, est)
+    assert any("rinno_filmes" in a and "não existe" in a for a in out["avisos"])
+
+
+def test_no_namespace_do_emissor_junta_com_o_que_ja_existia():
+    est = {"filmes": ["a"], "rinno_filmes": ["b"], "_avisos": [], "cliente": {}}
+    out = svc.no_namespace_do_emissor(est, "rinno", ["rinno_filmes", "rinno_takes"])
+    assert out["rinno_filmes"] == ["b", "a"] and "filmes" not in out
+
+
+# ---------- ajuste sobre a planilha e preço fixo por imagem ----------
+
+
+def test_planilha_mais_dez_por_cento_entra_no_preco_de_cada_item(db):
+    """Cliente novo: planilha + 10%. Fachada 3000 -> 3300, academia 1750 -> 1925,
+    planta tipo 1200 -> 1320. Sem linha de desconto: o cliente vê só os preços."""
+    _prep(db)
+    out = svc.levantar(db, _estrutura() | {"ajuste_planilha_pct": 10})
+    orc = out["fechado"]["orcamento"]
+    assert orc["externas"]["itens"][0]["preco"] == 3300
+    assert orc["internas"]["itens"][0]["preco"] == 1925
+    assert orc["plantas"]["itens"][0]["preco"] == 1320
+    assert orc["externas"]["itens"][0]["fonte"] == "planilha+10%:fachada"
+    assert out["fechado"]["financeiro"]["desconto_pct"] == 0
+    assert out["fechado"]["financeiro"]["total"] == 6545.0
+
+
+def test_planilha_menos_cinco_por_cento(db):
+    _prep(db)
+    out = svc.levantar(db, _estrutura() | {"ajuste_planilha_pct": -5})
+    assert out["fechado"]["orcamento"]["externas"]["itens"][0]["preco"] == 2850
+
+
+def test_preco_fixo_por_imagem_vale_para_toda_imagem_e_nada_mais(db):
+    """UNICOS/João Casseb: 12 imagens diferentes a 2.400 cada. Fachada,
+    academia e planta saem por 2.400; o app touch continua na tabela."""
+    _prep(db)
+    est = _estrutura() | {"preco_por_imagem": 2400, "tecnologia": ["App touch para o stand"]}
+    out = svc.levantar(db, est)
+    orc = out["fechado"]["orcamento"]
+    for cat in ("externas", "internas", "plantas"):
+        assert orc[cat]["itens"][0]["preco"] == 2400
+        assert orc[cat]["itens"][0]["fonte"] == "fixo_por_imagem"
+    assert orc["tecnologia"]["itens"][0]["preco"] == 22800
+
+
+def test_preco_por_imagem_passa_por_cima_do_historico(db, tmp_path, monkeypatch):
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    svc.gerar(db, _estrutura(), tmp_path)  # cria histórico da GALLI a preço de tabela
+    out = svc.levantar(db, _estrutura(estrategia="historico") | {"preco_por_imagem": 2200})
+    assert out["estrategia_usada"].startswith("historico")
+    assert out["fechado"]["orcamento"]["externas"]["itens"][0]["preco"] == 2200
+
+
+def test_ajuste_absurdo_e_erro_de_entrada(db):
+    _prep(db)
+    with pytest.raises(ValueError, match="ajuste_planilha_pct"):
+        svc.levantar(db, _estrutura() | {"ajuste_planilha_pct": -100})
+    with pytest.raises(ValueError, match="preco_por_imagem"):
+        svc.levantar(db, _estrutura() | {"preco_por_imagem": -1})
+
+
+def test_servico_com_duracao_mantem_a_redacao_do_usuario(db):
+    """Turtitta: 'Filme Institucional de até 2:00' — a linha do catálogo diz
+    3:30 e não pode sobrescrever a duração fechada com o cliente."""
+    _prep(db)
+    est = _estrutura_rinno() | {"rinno_filmes": ["filme institucional de até 2:00"]}
+    out = svc.levantar(db, est)
+    item = out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]
+    assert item["descricao"] == "Filme institucional de até 2:00"
+    assert item["preco"] == 18000  # mas o preço é o do institucional

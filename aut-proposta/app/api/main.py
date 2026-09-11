@@ -115,12 +115,12 @@ def rota_levantamento(corpo: CorpoLevantamento):
     finally:
         _fechar_conn(conn)
     return {
-        "estrutura": estrutura,
+        "estrutura": lev["estrutura"],
         "fechado": lev["fechado"],
         "estrategia_usada": lev["estrategia_usada"],
         "emissor": lev["emissor"],
         "avisos": lev["avisos"],
-        "pendencias": _pendencias(estrutura, lev["fechado"]),
+        "pendencias": _pendencias(lev["estrutura"], lev["fechado"]),
     }
 
 

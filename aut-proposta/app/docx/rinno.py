@@ -29,6 +29,7 @@ from app.docx.base import (
     itens_orcados,
 )
 from app.docx.formatos import brl
+from app.dominio.texto import normalizar
 from app.empresas import Empresa
 
 APRESENTACAO: list[list[Seg]] = [
@@ -74,11 +75,11 @@ ESCOPO_POR_FILME: dict[str, list[list[Seg]]] = {
         [("Recursos:", "b"), (" Banco de Imagens de humanização e respiros.", "")],
         [("Efeitos:", "b"), (" Overlay texto e efeitos especiais.", "")],
     ],
+    # Como saiu para a Turtitta (set/2026): sem linha de "Estrutura".
     "Filme Institucional": [
-        [("Estrutura:", "b"), (" Institucional — marca, trajetória e portfólio.", "")],
         [("Roteiro:", "b"),
-         (" Roteiro Cliente, ou Rinno Pauta de acordo com Book/Folder fornecido pela "
-          "agência de publicidade.", "")],
+         (" Roteiro Cliente, ou Rinno Pauta de acordo com Book/Folder do produto fornecido "
+          "pela agência de publicidade.", "")],
         [("Pós-Produção:", "b"), (" Edição e composição.", "")],
         [("Áudio:", "b"), (" Personalização de trilha sonora + locução, se for necessário.", "")],
         [("Recursos:", "b"), (" Banco de Imagens de humanização e respiros.", "")],
@@ -159,6 +160,14 @@ ENTREGA_E_DIREITOS: list[list[Seg]] = [
      (" Os valores desta proposta contemplam a entrega dos filmes em Full HD. Caso "
       "precisem do filme masterizado em resolução 4K (Ultra HD), o mesmo terá um acréscimo "
       "de 25% no valor total do orçamento.", "")],
+    [("Arquivos-fonte:", "b"),
+     (" Os arquivos utilizados para a produção, incluindo modelos 2D e 3D, cenas, texturas, "
+      "projetos de edição e demais materiais de trabalho para filmes permanecem de "
+      "propriedade única e exclusiva do ", ""),
+     ("Grupo Flying", "b"),
+     (" e não integram a entrega desta proposta. A contratação contempla exclusivamente os "
+      "materiais finais especificados no escopo, para o uso previsto nos Direitos de "
+      "Exibição.", "")],
 ]
 
 CRONOGRAMA: list[list[Seg]] = [
@@ -180,8 +189,11 @@ PARCELAS_PAGAMENTO = (
 
 
 def _escopo_de(descricao: str) -> list[list[Seg]]:
+    """Casa pelo começo da descrição sem ligar para maiúscula ou acento:
+    "Filme institucional de até 2:00", escrito pelo usuário, é institucional."""
+    alvo = normalizar(descricao)
     for prefixo, bullets in ESCOPO_POR_FILME.items():
-        if descricao.startswith(prefixo):
+        if alvo.startswith(normalizar(prefixo)):
             return bullets
     return []
 

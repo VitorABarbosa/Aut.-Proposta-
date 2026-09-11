@@ -51,6 +51,16 @@ _RE_DESCONTO = re.compile(r"(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*(?:de\s*)?(?:descont
 _RE_DESCONTO_2 = re.compile(r"desconto\s*(?:de|:)?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%", re.I)
 _RE_ESTRATEGIA_PLAN = re.compile(r"\b(?:planilha|tabela\s*padr[aã]o|pre[cç]o\s*de\s*planilha|pre[cç]o\s*padr[aã]o)\b", re.I)
 _RE_ESTRATEGIA_HIST = re.compile(r"\bhist[oó]ric|cliente\s*(?:antigo|anterior|recorrente)|m[eé]dia\s*do\s*cliente|mesma?\s*base\b", re.I)
+# "planilha + 10%", "planilha mais 10%", "10% em cima", "acréscimo de 10%"
+_RE_AJUSTE_POS = re.compile(
+    r"planilha\s*(?:\+|mais|com)\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*%"
+    r"|(\d{1,3}(?:[.,]\d{1,2})?)\s*%\s*(?:em\s*cima|a\s*mais|de\s*acr[eé]scimo)"
+    r"|acr[eé]scimo\s*(?:de)?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*%", re.I)
+# "planilha - 5%", "planilha menos 5%"
+_RE_AJUSTE_NEG = re.compile(r"planilha\s*(?:-|menos)\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*%", re.I)
+# "2.400 por imagem", "R$ 2200 a imagem", "média de 2.200 por imagem"
+_RE_PRECO_IMAGEM = re.compile(
+    r"(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+|\d{3,6})(?:,\d{2})?\s*(?:reais\s*)?(?:por|a|cada|/)\s*imagem", re.I)
 _RE_PRECOS_IND = re.compile(r"pre[cç]os?\s*(?:individuais?|por\s*item|por\s*imagem)|coluna\s*de\s*(?:pre[cç]o|valor)", re.I)
 
 _CAPS_IGNORAR = {"EXTERNAS", "INTERNAS", "PLANTAS", "REF", "PROJETO", "CLIENTE",
@@ -96,7 +106,8 @@ def _extrai_lista(bloco: str) -> list[str]:
         partes = re.split(r"[;,]| e ", bloco)
         items = [_limpa_item(p) for p in partes if _limpa_item(p)]
     # Filtra itens que parecem ser metadata (desconto, estratégia, etc) ao invés de lista
-    items = [i for i in items if not re.search(r"(?:desconto|planilha|hist[oó]rico|pre[cç]o)", i, re.I)]
+    items = [i for i in items if not re.search(
+        r"(?:desconto|planilha|hist[oó]rico|pre[cç]o|acr[eé]scimo|(?:por|a|cada)\s*imagem)", i, re.I)]
     return items
 
 
@@ -144,6 +155,19 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
     if m:
         desconto_pct = float(m.group(1).replace(",", "."))
 
+    ajuste_pct = 0.0
+    m = _RE_AJUSTE_POS.search(texto)
+    if m:
+        ajuste_pct = float(next(g for g in m.groups() if g).replace(",", "."))
+    m = _RE_AJUSTE_NEG.search(texto)
+    if m:
+        ajuste_pct = -float(m.group(1).replace(",", "."))
+
+    preco_por_imagem = None
+    m = _RE_PRECO_IMAGEM.search(texto)
+    if m:
+        preco_por_imagem = int(m.group(1).replace(".", ""))
+
     estrategia = "auto"
     if _RE_ESTRATEGIA_PLAN.search(texto):
         estrategia = "planilha"
@@ -166,6 +190,8 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
         **listas,
         "desconto_pct": desconto_pct,
         "desconto_label": None,
+        "ajuste_planilha_pct": ajuste_pct,
+        "preco_por_imagem": preco_por_imagem,
         "estrategia": estrategia,
         "mostrar_precos_individuais": bool(_RE_PRECOS_IND.search(texto)),
         "_origem": "local",
@@ -186,6 +212,8 @@ Schema:
 {linhas_schema},
   "desconto_pct": 0,
   "desconto_label": null,
+  "ajuste_planilha_pct": 0,
+  "preco_por_imagem": null,
   "estrategia": "auto" | "planilha" | "historico",
   "mostrar_precos_individuais": false
 }}
@@ -202,6 +230,9 @@ Regras importantes:
 - Para imagens, mantenha o nome curto do ambiente (ex.: "Fachada", "Lobby",
   "Implantação Térreo"). NÃO prefixe com "Perspectiva" — o gerador faz isso.
 - Se o usuário disser "10% de desconto", desconto_pct = 10.
+- "planilha + 10%", "10% em cima", "cliente novo" → ajuste_planilha_pct = 10;
+  "planilha - 5%" → -5. É ajuste no preço dos itens, NÃO desconto.
+- "2.400 por imagem", "média de 2.200 a imagem" → preco_por_imagem = 2400 (número).
 - Se mencionar "preços individuais por imagem" ou "coluna de valor",
   mostrar_precos_individuais = true.
 - NUNCA invente preços ou valores em reais.

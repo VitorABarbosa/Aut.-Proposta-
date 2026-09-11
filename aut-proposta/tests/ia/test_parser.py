@@ -114,3 +114,22 @@ def test_parse_local_filtra_metadata_historico_sem_acento_multilinha():
     out = parser.parse_local(texto)
     assert out["plantas"] == ["Implantação Térreo", "Apartamento Tipo"]
     assert out["estrategia"] == "historico"
+
+
+def test_parser_local_le_ajuste_sobre_a_planilha():
+    from app.ia.parser import parse
+    base = "Cliente: GALLI, ref Aurora, a/c Daniel\nExternas: Fachada\n"
+    assert parse(base + "planilha + 10%")["ajuste_planilha_pct"] == 10
+    assert parse(base + "preço de planilha com 10% em cima")["ajuste_planilha_pct"] == 10
+    assert parse(base + "planilha menos 5%")["ajuste_planilha_pct"] == -5
+    assert parse(base + "10% de desconto")["ajuste_planilha_pct"] == 0
+
+
+def test_parser_local_le_preco_por_imagem():
+    from app.ia.parser import parse
+    base = "Cliente: GALLI, ref Aurora, a/c Daniel\nExternas: Fachada, Piscina\n"
+    assert parse(base + "R$ 2.400 por imagem")["preco_por_imagem"] == 2400
+    assert parse(base + "média de 2200 a imagem")["preco_por_imagem"] == 2200
+    sem = parse(base)
+    assert sem["preco_por_imagem"] is None
+    assert sem["externas"] == ["Fachada", "Piscina"]  # a linha do preço não vira item
