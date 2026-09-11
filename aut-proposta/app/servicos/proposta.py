@@ -47,6 +47,35 @@ def _descricoes(estrutura: dict[str, Any], categorias: list[str]) -> dict[str, l
     return {cat: estrutura.get(cat, []) for cat in categorias}
 
 
+def no_namespace_do_emissor(estrutura: dict[str, Any], emissor: str,
+                            categorias: list[str]) -> dict[str, Any]:
+    """Move itens de categoria sem prefixo para a categoria da empresa.
+
+    O schema da ferramenta do chat oferece `filmes` (Flying) e `rinno_filmes`
+    lado a lado, e o modelo pega a chave curta mesmo com o emissor certo — foi
+    o que aconteceu com "filme institucional para a Archtech": emissor rinno,
+    item em `filmes`, e a proposta saiu sem preço. Aqui isso vira
+    `rinno_filmes` sem depender de o modelo acertar. Só entra no namespace
+    do próprio emissor; nunca cruza de uma empresa para outra.
+    """
+    saida = dict(estrutura)
+    for cat, itens in estrutura.items():
+        if cat.startswith("_") or cat in categorias or not isinstance(itens, list) or not itens:
+            continue
+        alvo = f"{emissor}_{cat}"
+        if alvo in categorias:
+            saida[alvo] = [*saida.get(alvo, []), *itens]
+            del saida[cat]
+    return saida
+
+
+def _inteiro_ou_none(valor: Any) -> int | None:
+    try:
+        return int(round(float(valor))) if valor not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, Any]:
     """Resolve estratégia e preços (NEON) e devolve o orçamento fechado."""
     avisos = list(estrutura.get("_avisos", []))
@@ -55,7 +84,15 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     tabela_precos = resolver_tabela(emissor, estrutura.get("tabela_precos"))
 
     tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
+    estrutura = no_namespace_do_emissor(estrutura, emissor, tabela.categorias())
     descricoes = _descricoes(estrutura, tabela.categorias())
+
+    ajuste_pct = float(estrutura.get("ajuste_planilha_pct") or 0)
+    preco_por_imagem = _inteiro_ou_none(estrutura.get("preco_por_imagem"))
+    if preco_por_imagem is not None and preco_por_imagem < 0:
+        raise ValueError(f"preco_por_imagem inválido: {preco_por_imagem} (deve ser >= 0)")
+    if not -100 < ajuste_pct < 1000:
+        raise ValueError(f"ajuste_planilha_pct inválido: {ajuste_pct}")
     # Itens de categorias fora da tabela escolhida (ex.: tecnologia no mcmv)
     # não podem evaporar sem sinal — o usuário decide trocar de tabela ou remover.
     for cat, itens in estrutura.items():
@@ -71,11 +108,13 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     historico = Historico(conn)
     orc = None
     if pedida == "historico" or (pedida == "auto" and historico.tem_cliente(cliente)):
-        orc = orcar_pelo_historico(historico, cliente, descricoes, tabela)
+        orc = orcar_pelo_historico(historico, cliente, descricoes, tabela,
+                                   preco_por_imagem=preco_por_imagem)
         if orc is None and pedida == "historico":
             avisos.append(f"Cliente '{cliente}' não tem histórico — usei a tabela de planilha.")
     if orc is None:
-        orc = orcar_pela_planilha(descricoes, tabela)
+        orc = orcar_pela_planilha(descricoes, tabela, ajuste_pct=ajuste_pct,
+                                  preco_por_imagem=preco_por_imagem)
 
     desconto = None
     if estrutura.get("desconto_pct", 0):
@@ -87,6 +126,9 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
 
     return {
         "cliente": estrutura["cliente"],
+        # A estrutura já no namespace do emissor: quem devolve ao front tem de
+        # usar esta, senão o preview lista `rinno_filmes` sem achar os itens.
+        "estrutura": estrutura,
         "fechado": fechar_orcamento(orc, desconto),
         "estrategia_usada": orc.estrategia,
         "emissor": emissor,

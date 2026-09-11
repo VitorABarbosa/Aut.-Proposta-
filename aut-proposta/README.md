@@ -78,13 +78,40 @@ prefixo: são as que já estão gravadas nas propostas antigas.
 Uma proposta é de UMA empresa. Pedido que mistura serviços de duas (imagens +
 filme) vira duas propostas — o chat avisa e pergunta por qual começar.
 
+### Preço fora da planilha
+
+A planilha é ponto de partida, não regra. Dois campos da estrutura cobrem as
+práticas da casa, e os dois entram no preço de cada item — por isso **não
+aparecem na proposta**, ao contrário do desconto, que é linha visível:
+
+- `ajuste_planilha_pct`: "planilha + 10%" (costume para cliente novo) ou
+  "planilha − 5%". Fachada 3.000 vira 3.300; a fonte do item registra
+  `planilha+10%:fachada`.
+- `preco_por_imagem`: o cliente fecha um valor único para todas as
+  perspectivas e plantas (OUSY a 2.200, UNICOS a 2.400), seja fachada ou voo
+  de pássaro. Só afeta categorias de imagem; filme, tour e tecnologia seguem
+  na tabela. Passa por cima do histórico também.
+
+Proposta de cortesia (desconto de 100%) imprime **CORTESIA** no investimento,
+como a Rinno faz, em vez de "R$ 0,00".
+
+### Categoria certa para a empresa certa
+
+O chat oferece `filmes` (Flying) e `rinno_filmes` lado a lado e o modelo às
+vezes pega a chave curta mesmo com o emissor certo. `levantar` remapeia
+categoria sem prefixo para o namespace do emissor (`filmes` → `rinno_filmes`,
+`fachada` → `nid_fachada`) antes de precificar — só para dentro da própria
+empresa, nunca de uma para outra — e devolve a estrutura já corrigida.
+
 ### Como o item aparece escrito
 
 Categoria com prefixo de escrita é imagem: cada cena é diferente, então o texto
 do usuário é preservado ("Fachada vista da calçada" → "Perspectiva Fachada
 vista da calçada"). Categoria sem prefixo é serviço de catálogo — filme, tour,
 projeto: sai com o nome comercial oficial, não como foi digitado na pressa
-("filme corretor" → "Filme Corretor / Produto de até 1:30").
+("filme corretor" → "Filme Corretor / Produto de até 1:30"). Exceto quando o
+texto já traz duração ou número ("filme institucional de até 2:00"): aí a
+redação do usuário fica, porque a duração foi fechada com o cliente.
 
 ## Print no chat
 

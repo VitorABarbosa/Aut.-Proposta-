@@ -153,3 +153,35 @@ def test_timbrado_sobrevive_com_a_arte_inteira(tmp_path, emissor):
 def test_emissor_invalido_nao_gera_documento(tmp_path):
     with pytest.raises(ValueError, match="emissor inválido"):
         gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "x.docx", emissor="disney")
+
+
+def test_rinno_tem_a_clausula_de_arquivos_fonte(tmp_path):
+    saida = gerar_docx(CLIENTE, FECHADO_RINNO, tmp_path / "r.docx", data=DATA, emissor="rinno")
+    texto = _texto(saida)
+    assert "Arquivos-fonte:" in texto
+    assert "propriedade única e exclusiva do Grupo Flying" in texto
+
+
+def test_institucional_com_duracao_do_usuario_ainda_ganha_o_escopo(tmp_path):
+    """Descrição escrita pelo usuário ('filme institucional de até 2:00') casa
+    com o escopo do institucional, que — como na Turtitta — não tem 'Estrutura'."""
+    fechado = _fechado([("rinno_filmes", "Filmes",
+                         [("Filme institucional de até 2:00", 15000)])])
+    saida = gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", data=DATA, emissor="rinno")
+    texto = _texto(saida)
+    assert "2.1 Filme institucional de até 2:00" in texto
+    assert "Este item inclui:" in texto
+    assert "Roteiro: Roteiro Cliente" in texto
+    assert "Estrutura:" not in texto
+
+
+def test_cortesia_sai_como_palavra_e_nao_como_zero(tmp_path):
+    """UNICOS: filme viral com valor 4.500 e investimento CORTESIA."""
+    fechado = _fechado([("rinno_filmes", "Filmes", [("Filme Viral de até 1:00", 4500)])])
+    fechado["financeiro"] = {"subtotal": 4500, "desconto_pct": 100.0, "desconto_valor": 4500.0,
+                             "total": 0.0, "rotulo": "Cortesia"}
+    saida = gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", data=DATA, emissor="rinno")
+    texto = _texto(saida)
+    assert "CORTESIA" in texto
+    assert "R$ 0,00" not in texto
+    assert "Valor bruto" not in texto
