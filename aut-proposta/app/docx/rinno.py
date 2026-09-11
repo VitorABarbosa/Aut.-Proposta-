@@ -162,12 +162,12 @@ ENTREGA_E_DIREITOS: list[list[Seg]] = [
       "de 25% no valor total do orçamento.", "")],
     [("Arquivos-fonte:", "b"),
      (" Os arquivos utilizados para a produção, incluindo modelos 2D e 3D, cenas, texturas, "
-      "projetos de edição e demais materiais de trabalho para filmes permanecem de "
-      "propriedade única e exclusiva do ", ""),
+      "materiais, arquivos de renderização e demais arquivos editáveis, tanto para produção "
+      "das imagens quanto para filmes permanecem de propriedade única e exclusiva do ", ""),
      ("Grupo Flying", "b"),
      (" e não integram a entrega desta proposta. A contratação contempla exclusivamente os "
-      "materiais finais especificados no escopo, para o uso previsto nos Direitos de "
-      "Exibição.", "")],
+      "materiais finais especificados no escopo, para o uso exclusivo do lançamento "
+      "pertinente à contratação.", "")],
 ]
 
 CRONOGRAMA: list[list[Seg]] = [
@@ -181,10 +181,11 @@ CRONOGRAMA: list[list[Seg]] = [
       "das imagens em HR.", "")],
 ]
 
+# 50/50 é o que está no modelo oficial da Rinno e nas propostas enviadas
+# (Turtitta, Unicos); o 50/25/25 da planilha é o padrão da Flying.
 PARCELAS_PAGAMENTO = (
     (50, "Na aprovação desta Proposta"),
-    (25, "Aprovação do Preview"),
-    (25, "Entrega Final dos filmes"),
+    (50, "Na Entrega dos Filmes"),
 )
 
 
@@ -218,23 +219,29 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     for _cat, rotulo, bloco in itens_orcados(orc):
         for item in bloco["itens"]:
             sub += 1
-            titulo = f"2.{sub} {item['descricao']}"
+            # No modelo oficial o item é "Um Filme Conceito de até 2:30…".
+            desc = item["descricao"]
+            artigo = "Um " if normalizar(desc).startswith("filme") else ""
+            titulo = f"2.{sub} {artigo}{desc}"
             if mostra_precos_individuais:
                 titulo += f" — {brl(item['preco'])}"
             _subtitulo(doc, titulo)
-            escopo = _escopo_de(item["descricao"])
-            if escopo:
+            escopo = _escopo_de(desc)
+            # "Este item inclui:" só quando há lista; o viral tem uma linha só
+            # ("Conteúdo: …") e no modelo ela vem direto.
+            if len(escopo) > 1:
                 p = _par(doc, depois=4, recuo=1.0)
                 _run(p, "Este item inclui:", estilo="b")
-                for segs in escopo:
-                    _bullet(doc, segs)
+            for segs in escopo:
+                _bullet(doc, segs)
         p = _par(doc, antes=6, depois=8)
         _run(p, f"{rotulo} — Valor total: {brl(bloco['total'])}", estilo="b")
 
     # ===== 3 – Investimento + forma de pagamento =====
-    _titulo_secao(doc, "3", "INVESTIMENTO PARA O DESENVOLVIMENTO DOS ITENS ACIMA "
+    _titulo_secao(doc, "3", "INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA "
                             "DESCRITOS + FORMA DE PAGAMENTO:")
-    bloco_investimento(doc, "3.1", fin)
+    bloco_investimento(doc, "3.1", fin,
+                       titulo="Investimentos da Produção Técnica dos Filmes Acima")
     bloco_pagamento(doc, "3.2", fin, PARCELAS_PAGAMENTO)
 
     # ===== 4 – Prazos, considerações e entrega =====

@@ -450,3 +450,17 @@ def test_preco_informado_negativo_e_erro(db):
     _prep(db)
     with pytest.raises(ValueError, match="preço informado inválido"):
         svc.levantar(db, _estrutura() | {"externas": [{"descricao": "Fachada", "preco": -1}]})
+
+
+# ---------- catálogo vazio no banco (o que aconteceu em produção) ----------
+
+
+def test_tabela_vazia_no_banco_e_erro_que_diz_para_rodar_o_seed(db):
+    """Backend subiu sem o seed: a Rinno saía com R$ 0,00 e um aviso de
+    "categoria não existe" que a IA repassava como pedido errado."""
+    aplicar_schema(db)  # schema sim, seed não
+    with pytest.raises(ValueError) as exc:
+        svc.levantar(db, _estrutura_rinno())
+    msg = str(exc.value)
+    assert "catálogo da RINNO FILMS não está carregado" in msg
+    assert "scripts.seed_precos" in msg

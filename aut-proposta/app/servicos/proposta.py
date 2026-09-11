@@ -84,6 +84,16 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     tabela_precos = resolver_tabela(emissor, estrutura.get("tabela_precos"))
 
     tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
+    if not tabela.categorias():
+        # Aconteceu em produção: o backend multi-empresa subiu sem rodar o seed
+        # e a Rinno saiu com R$ 0,00 e um aviso de "categoria não existe" que a
+        # IA repassou como se o pedido estivesse errado. Catálogo vazio não é
+        # pedido errado — é banco sem carga, e tem de dizer isso.
+        raise ValueError(
+            f"O catálogo da {empresa_emissora(emissor).nome} não está carregado no banco "
+            f"(tabela de preços '{tabela_precos}' vazia). Rode "
+            "`python -m scripts.seed_precos` com o DATABASE_URL de produção."
+        )
     estrutura = no_namespace_do_emissor(estrutura, emissor, tabela.categorias())
     descricoes = _descricoes(estrutura, tabela.categorias())
 
