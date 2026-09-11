@@ -17,20 +17,25 @@ from app.dominio.descontos import Desconto
 from app.dominio.orcamento import fechar_orcamento, orcar_pela_planilha
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
+from app.empresas import empresa as empresa_emissora
+from app.empresas import resolver_tabela
 from app.historico.historico import Historico
 from app.historico.orcamento_historico import orcar_pelo_historico
 from app.storage.r2 import enviar_docx
 
-TABELAS_VALIDAS = ("padrao", "mcmv")
 
-
-def parse_texto(conn: psycopg.Connection, texto: str) -> dict[str, Any]:
-    """Converte texto livre em estrutura, usando as categorias ativas do
-    catálogo padrão (o `texto` não indica ainda qual tabela_precos usar)."""
+def parse_texto(conn: psycopg.Connection, texto: str,
+                emissor: str | None = None) -> dict[str, Any]:
+    """Converte texto livre em estrutura, usando as categorias da empresa
+    emissora (o `texto` não indica ainda qual das tabelas dela usar)."""
     from app.ia.parser import parse
 
-    tabela = carregar_tabela_precos(conn)
-    return parse(texto, categorias=tabela.categorias())
+    emp = empresa_emissora(emissor)
+    tabela = carregar_tabela_precos(conn, emp.tabela_padrao)
+    estrutura = parse(texto, categorias=tabela.categorias())
+    estrutura["emissor"] = emp.chave
+    estrutura["tabela_precos"] = emp.tabela_padrao
+    return estrutura
 
 
 def _slug(texto: str) -> str:
@@ -46,11 +51,8 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     """Resolve estratégia e preços (NEON) e devolve o orçamento fechado."""
     avisos = list(estrutura.get("_avisos", []))
 
-    tabela_precos = estrutura.get("tabela_precos") or "padrao"
-    if tabela_precos not in TABELAS_VALIDAS:
-        raise ValueError(
-            f"tabela_precos inválida: {tabela_precos!r} (válidas: {TABELAS_VALIDAS})"
-        )
+    emissor = empresa_emissora(estrutura.get("emissor")).chave
+    tabela_precos = resolver_tabela(emissor, estrutura.get("tabela_precos"))
 
     tabela: TabelaPrecos = carregar_tabela_precos(conn, tabela_precos)
     descricoes = _descricoes(estrutura, tabela.categorias())
@@ -63,15 +65,15 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
                 f"Categoria '{cat}' não existe na tabela {tabela_precos} — "
                 f"{len(itens)} item(ns) não precificado(s)."
             )
-    empresa = estrutura["cliente"]["empresa"]
+    cliente = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
 
     historico = Historico(conn)
     orc = None
-    if pedida == "historico" or (pedida == "auto" and historico.tem_cliente(empresa)):
-        orc = orcar_pelo_historico(historico, empresa, descricoes, tabela)
+    if pedida == "historico" or (pedida == "auto" and historico.tem_cliente(cliente)):
+        orc = orcar_pelo_historico(historico, cliente, descricoes, tabela)
         if orc is None and pedida == "historico":
-            avisos.append(f"Cliente '{empresa}' não tem histórico — usei a tabela de planilha.")
+            avisos.append(f"Cliente '{cliente}' não tem histórico — usei a tabela de planilha.")
     if orc is None:
         orc = orcar_pela_planilha(descricoes, tabela)
 
@@ -87,6 +89,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         "cliente": estrutura["cliente"],
         "fechado": fechar_orcamento(orc, desconto),
         "estrategia_usada": orc.estrategia,
+        "emissor": emissor,
         "tabela_precos": tabela_precos,
         "avisos": avisos,
     }
@@ -101,7 +104,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     cliente_id = upsert_cliente(conn, cliente["empresa"], cliente.get("contato"))
     proposta_id = salvar_proposta(
         conn, cliente_id, fechado, referencia=cliente.get("ref"),
-        tabela_precos=lev["tabela_precos"],
+        tabela_precos=lev["tabela_precos"], emissor=lev["emissor"],
     )
 
     docx_path = Path(dir_saida) / f"proposta_{proposta_id}.docx"
@@ -109,10 +112,14 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
         cliente,
         fechado,
         docx_path,
+        emissor=lev["emissor"],
         mostra_precos_individuais=bool(estrutura.get("mostrar_precos_individuais")),
     )
 
-    chave = f"Propostas/{_slug(cliente['empresa'])}/{_slug(cliente.get('ref') or 'geral')}/proposta_{proposta_id}.docx"
+    # Emissor no caminho: o mesmo cliente/ref pode ter proposta das três
+    # empresas, e no R2 elas ficam separadas por pasta.
+    chave = (f"Propostas/{lev['emissor']}/{_slug(cliente['empresa'])}"
+             f"/{_slug(cliente.get('ref') or 'geral')}/proposta_{proposta_id}.docx")
     docx_url = enviar_docx(docx_path, chave)
     if docx_url:
         atualizar_docx_url(conn, proposta_id, docx_url)
@@ -130,5 +137,6 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
         "docx_url": docx_url,
         "chave_r2": chave,
         "fechado": fechado,
+        "emissor": lev["emissor"],
         "avisos": lev["avisos"],
     }

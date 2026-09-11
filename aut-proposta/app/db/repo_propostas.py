@@ -4,6 +4,7 @@ from __future__ import annotations
 import psycopg
 
 from app.dominio.texto import normalizar
+from app.empresas import EMISSOR_PADRAO
 
 
 def upsert_cliente(conn: psycopg.Connection, nome: str, contato: str | None = None) -> int:
@@ -38,16 +39,18 @@ def salvar_proposta(
     referencia: str | None = None,
     docx_url: str | None = None,
     tabela_precos: str = "padrao",
+    emissor: str = EMISSOR_PADRAO,
 ) -> int:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
             "INSERT INTO propostas "
-            "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url, tabela_precos) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url, "
+            "tabela_precos, emissor) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (cliente_id, referencia, orc["subtotal"], fin["desconto_pct"],
-             fin["desconto_valor"], fin["total"], docx_url, tabela_precos),
+             fin["desconto_valor"], fin["total"], docx_url, tabela_precos, emissor),
         )
         pid = cur.fetchone()[0]
         for cat, bloco in _categorias_do_orcamento(orc):
@@ -102,14 +105,14 @@ def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> d
     """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct, p.tabela_precos "
+            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct, p.tabela_precos, p.emissor "
             "FROM propostas p JOIN clientes c ON c.id = p.cliente_id WHERE p.id = %s",
             (proposta_id,),
         )
         row = cur.fetchone()
         if not row:
             return None
-        nome, contato, referencia, desconto_pct, tabela_precos = row
+        nome, contato, referencia, desconto_pct, tabela_precos, emissor = row
 
         listas: dict[str, list[str]] = {}
         cur.execute(
@@ -127,6 +130,7 @@ def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> d
         "desconto_label": None,
         "estrategia": "planilha",
         "mostrar_precos_individuais": False,
+        "emissor": emissor or EMISSOR_PADRAO,
         "tabela_precos": tabela_precos,
         "_avisos": [],
     }
@@ -143,7 +147,7 @@ def excluir_proposta(conn: psycopg.Connection, proposta_id: int) -> bool:
 def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> list[dict]:
     """Lista propostas (mais recente primeiro), com filtro opcional por cliente."""
     sql = (
-        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url "
+        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url, p.emissor "
         "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
     )
     params: tuple = ()
@@ -155,6 +159,7 @@ def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> li
         cur.execute(sql, params)
         return [
             {"id": i, "cliente": nome, "referencia": ref,
-             "data": data.isoformat(), "total": float(total), "docx_url": url}
-            for i, nome, ref, data, total, url in cur.fetchall()
+             "data": data.isoformat(), "total": float(total), "docx_url": url,
+             "emissor": emissor or EMISSOR_PADRAO}
+            for i, nome, ref, data, total, url, emissor in cur.fetchall()
         ]

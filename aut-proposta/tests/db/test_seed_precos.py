@@ -6,11 +6,12 @@ from scripts.seed_precos import semear_precos
 pytestmark = pytest.mark.db
 
 
-def test_seed_popula_categorias_e_itens_das_duas_tabelas(db):
+def test_seed_popula_categorias_e_itens_das_quatro_tabelas(db):
     aplicar_schema(db)
     contagens = semear_precos(db)
 
-    assert contagens["categorias"] == 15  # 8 (padrao) + 7 (mcmv)
+    # 8 (padrao) + 7 (mcmv) da Flying, 3 da Rinno e 5 da NID.
+    assert contagens["categorias"] == 23
     assert contagens["itens"] >= 15  # ao menos uma linha por categoria
 
     with db.cursor() as cur:
@@ -18,6 +19,10 @@ def test_seed_popula_categorias_e_itens_das_duas_tabelas(db):
         assert cur.fetchone()[0] == 8
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'mcmv'")
         assert cur.fetchone()[0] == 7
+        cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'rinno'")
+        assert cur.fetchone()[0] == 3
+        cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'nid'")
+        assert cur.fetchone()[0] == 5
 
         # A categoria 'externas' padrão deve conter a linha de fachada a 3000.
         cur.execute(

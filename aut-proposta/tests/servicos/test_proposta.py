@@ -184,7 +184,9 @@ def test_gerar_usa_chave_organizada_por_cliente_projeto(db, tmp_path, monkeypatc
                         lambda caminho, chave: (chaves.append(chave),
                                                 f"https://r2/{chave}")[1])
     out = svc.gerar(db, _estrutura(), tmp_path)
-    esperado = f"Propostas/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
+    # O emissor abre o caminho: o mesmo cliente/projeto pode ter proposta das
+    # três empresas, e no R2 elas não se misturam.
+    esperado = f"Propostas/flying/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
     assert chaves == [esperado]
     assert out["chave_r2"] == esperado
 
@@ -199,3 +201,93 @@ def test_categoria_fora_da_tabela_gera_aviso(db):
     out = svc.levantar(db, est)
     assert any("tecnologia" in a and "mcmv" in a for a in out["avisos"])
     assert any("1 item(ns) não precificado" in a for a in out["avisos"])
+
+
+# ---------- multi-empresa ----------
+
+
+def _estrutura_rinno():
+    return {
+        "cliente": {"empresa": "OUSY", "ref": "Vila Mariana", "contato": "Yuri"},
+        "emissor": "rinno",
+        "rinno_filmes": ["Filme conceito", "Filme corretor"],
+        "rinno_takes": ["Take IA da piscina"],
+        "desconto_pct": 0.0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+
+
+def test_levantar_da_rinno_usa_a_tabela_da_rinno(db):
+    _prep(db)
+    out = svc.levantar(db, _estrutura_rinno())
+
+    assert out["emissor"] == "rinno" and out["tabela_precos"] == "rinno"
+    orc = out["fechado"]["orcamento"]
+    assert orc["rinno_filmes"]["total"] == 24000   # conceito 14000 + produto 10000
+    assert orc["rinno_takes"]["total"] == 650
+    assert out["fechado"]["financeiro"]["total"] == 24650.0
+
+
+def test_item_de_servico_sai_com_o_nome_do_catalogo(db):
+    """Imagem preserva a cena escrita pelo usuário; serviço sai com o nome
+    comercial — 'Filme corretor' vira 'Filme Corretor / Produto de até 1:30'."""
+    _prep(db)
+    out = svc.levantar(db, _estrutura_rinno())
+    descricoes = [i["descricao"] for i in out["fechado"]["orcamento"]["rinno_filmes"]["itens"]]
+    assert descricoes == ["Filme Conceito de até 2:30 (Dois Minutos e Meio)",
+                          "Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)"]
+
+    lev_flying = svc.levantar(db, _estrutura())
+    externas = lev_flying["fechado"]["orcamento"]["externas"]["itens"]
+    assert externas[0]["descricao"] == "Perspectiva Fachada vista da calçada"
+
+
+def test_emissor_fica_gravado_e_volta_na_listagem_e_na_copia(db, tmp_path, monkeypatch):
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    out = svc.gerar(db, _estrutura_rinno(), tmp_path)
+
+    from app.db.repo_propostas import listar_propostas, obter_estrutura_de_proposta
+    assert out["emissor"] == "rinno"
+    assert listar_propostas(db)[0]["emissor"] == "rinno"
+    copia = obter_estrutura_de_proposta(db, out["proposta_id"])
+    assert copia["emissor"] == "rinno" and copia["tabela_precos"] == "rinno"
+
+
+def test_proposta_sem_emissor_continua_sendo_flying(db, tmp_path, monkeypatch):
+    """Estrutura antiga (sem o campo) não pode quebrar nem trocar de empresa."""
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    out = svc.gerar(db, _estrutura(), tmp_path)
+    assert out["emissor"] == "flying"
+    from app.db.repo_propostas import listar_propostas
+    assert listar_propostas(db)[0]["emissor"] == "flying"
+
+
+def test_tabela_de_outra_empresa_no_levantamento_e_erro(db):
+    _prep(db)
+    est = _estrutura_rinno() | {"tabela_precos": "mcmv"}
+    with pytest.raises(ValueError, match="não é da RINNO FILMS"):
+        svc.levantar(db, est)
+
+
+def test_gerar_da_nid_escreve_o_docx_da_nid(db, tmp_path, monkeypatch):
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    est = {
+        "cliente": {"empresa": "OUSY", "ref": "Vila Mariana", "contato": "Yuri"},
+        "emissor": "nid",
+        "nid_fachada": ["Design de fachada"],
+        "nid_pdv": ["Stand de vendas"],
+        "desconto_pct": 0.0, "desconto_label": None, "estrategia": "planilha",
+        "mostrar_precos_individuais": False, "_avisos": [],
+    }
+    out = svc.gerar(db, est, tmp_path)
+
+    assert out["fechado"]["financeiro"]["total"] == 47000.0  # 22000 + 25000
+    assert out["chave_r2"].startswith("Propostas/nid/ousy/vila-mariana/")
+
+    from docx import Document
+    texto = "\n".join(p.text for p in Document(out["docx_path"]).paragraphs)
+    assert texto.startswith("NID STUDIO – SEU NINHO CRIATIVO")
+    assert "Lâmina 07: Planta de Construir e Demolir" in texto

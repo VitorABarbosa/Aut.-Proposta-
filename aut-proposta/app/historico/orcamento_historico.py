@@ -10,7 +10,7 @@ from app.dominio.orcamento import (
     CategoriaOrcada,
     ItemOrcado,
     Orcamento,
-    _formata_descricao,
+    descricao_final,
 )
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
@@ -36,6 +36,9 @@ def orcar_pelo_historico(
     for cat in tabela.categorias():
         for desc in descricoes.get(cat, []):
             chave = normalizar(desc)
+            # A classificação vale pelo NOME do serviço mesmo quando o preço
+            # vem do histórico: o cliente repete o preço, não a redação.
+            classif = tabela.classificar(desc, cat)
             preco: int | None = None
             fonte = ""
 
@@ -55,14 +58,14 @@ def orcar_pelo_historico(
                 fonte = f"historico:{cliente}:media_categoria"
 
             if preco is None:
-                classif = tabela.classificar(desc, cat)
                 preco = classif["preco"]
                 fonte = f"fallback_planilha:{classif['chave']}"
 
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
-                    descricao_normalizada=_formata_descricao(desc, cat, tabela),
+                    descricao_normalizada=descricao_final(
+                        desc, cat, tabela, classif["descricao_padrao"]),
                     preco=preco,
                     fonte=fonte,
                 )

@@ -66,4 +66,40 @@
   {"nome": "estudos", "ordem": 7, "rotulo": "Estudos de Fachada", "prefixo": "",
    "default": 11500, "descricao_padrao": "Estudo de Fachada / Cromático", "itens": [
     {"chave": "estudo_fachada", "descricao": "Estudo de Fachada / Cromático de Fachada", "preco": 11500, "padroes": ["estudo", "cromatico", "cromático"]}]}
+]},
+ "rinno": {"categorias": [
+  {"nome": "rinno_filmes", "ordem": 1, "rotulo": "Filmes", "prefixo": "",
+   "default": 14000, "descricao_padrao": "Filme Conceito de até 2:30 (Dois Minutos e Meio)", "itens": [
+    {"chave": "filme_conceito", "descricao": "Filme Conceito de até 2:30 (Dois Minutos e Meio)", "preco": 14000, "padroes": ["conceito"]},
+    {"chave": "filme_institucional", "descricao": "Filme Institucional de até 3:30 (Três Minutos e Meio)", "preco": 18000, "padroes": ["institucional"]},
+    {"chave": "filme_produto", "descricao": "Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)", "preco": 10000, "padroes": ["produto", "corretor"]},
+    {"chave": "filme_viral", "descricao": "Filme Viral de até 1:00 (Um Minuto) — formato 9:16", "preco": 3900, "padroes": ["viral", "9:16", "rede social", "redes sociais"]},
+    {"chave": "filme_doc", "descricao": "Filme Documentário de até 1:00 por episódio — valor por episódio", "preco": 5900, "padroes": ["documentario", "\\bdoc\\b", "episodio"]},
+    {"chave": "filme_3d_animado", "descricao": "Filme 3D Animado de 60 segundos", "preco": 18000, "padroes": ["3d", "animado"]}]},
+  {"nome": "rinno_takes", "ordem": 2, "rotulo": "Takes Animados", "prefixo": "",
+   "default": 1300, "descricao_padrao": "Take 3D Animado de até 9 segundos", "itens": [
+    {"chave": "take_ia", "descricao": "Take I.A. Animado de até 12 segundos", "preco": 650, "padroes": ["\\bi ?a\\b", "inteligencia artificial"]},
+    {"chave": "take_3d", "descricao": "Take 3D Animado de até 9 segundos", "preco": 1300, "padroes": ["3d", "take"]}]},
+  {"nome": "rinno_pacotes", "ordem": 3, "rotulo": "Pacotes", "prefixo": "",
+   "default": 28000, "descricao_padrao": "Pacote Rinno Filmes", "itens": [
+    {"chave": "pacote_rinno", "descricao": "Pacote Rinno Filmes (Conceito + Produto + 2 Virais + Takes Animados em I.A. dos ambientes de lazer)", "preco": 28000, "padroes": ["pacote"]}]}
+]},
+ "nid": {"categorias": [
+  {"nome": "nid_fachada", "ordem": 1, "rotulo": "Design de Fachada", "prefixo": "",
+   "default": 22000, "descricao_padrao": "Design de Fachada", "itens": [
+    {"chave": "design_fachada", "descricao": "Design de Fachada", "preco": 22000, "padroes": ["fachada"]}]},
+  {"nome": "nid_interiores", "ordem": 2, "rotulo": "Projetos de Interiores", "prefixo": "",
+   "default": 2500, "descricao_padrao": "Projeto de Interiores — Áreas Comuns / Lazer (por ambiente)", "itens": [
+    {"chave": "apto_modelo_3dorm", "descricao": "Projeto de Interiores — Apto Modelo Decorado (3 dormitórios)", "preco": 20000, "padroes": ["3 ?dorm", "tres dorm"]},
+    {"chave": "apto_modelo_2dorm", "descricao": "Projeto de Interiores — Apto Modelo Decorado (2 dormitórios)", "preco": 14000, "padroes": ["2 ?dorm", "dois dorm", "apto modelo", "apartamento modelo", "modelo decorado"]},
+    {"chave": "areas_comuns", "descricao": "Projeto de Interiores — Áreas Comuns / Lazer (por ambiente)", "preco": 2500, "padroes": ["area comum", "areas comuns", "lazer", "ambiente"]}]},
+  {"nome": "nid_pdv", "ordem": 3, "rotulo": "Stand de Vendas / PDV", "prefixo": "",
+   "default": 25000, "descricao_padrao": "Projeto Stand de Vendas / PDV", "itens": [
+    {"chave": "stand_pdv", "descricao": "Projeto Stand de Vendas / PDV", "preco": 25000, "padroes": ["stand", "pdv", "plantao", "ponto de venda"]}]},
+  {"nome": "nid_produto", "ordem": 4, "rotulo": "Desenvolvimento de Produto", "prefixo": "",
+   "default": 20000, "descricao_padrao": "Desenvolvimento de Produto / Conceito + Áreas de Lazer", "itens": [
+    {"chave": "produto_conceito", "descricao": "Desenvolvimento de Produto / Conceito + Áreas de Lazer", "preco": 20000, "padroes": ["produto", "conceito"]}]},
+  {"nome": "nid_decoracao", "ordem": 5, "rotulo": "Planilha de Decoração", "prefixo": "",
+   "default": 6500, "descricao_padrao": "Planilha de Decoração (Quantificativos e Descritivos + Valores)", "itens": [
+    {"chave": "planilha_decoracao", "descricao": "Planilha de Decoração (Quantificativos e Descritivos + Valores)", "preco": 6500, "padroes": ["decoracao", "quantificativo", "descritivo"]}]}
 ]}}
