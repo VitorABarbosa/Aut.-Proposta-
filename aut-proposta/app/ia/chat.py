@@ -70,6 +70,15 @@ você):
 - `preco_por_imagem`: "2.400 por imagem", "média de 2.200 a imagem", "mesmo
   valor por imagem do projeto anterior" → o número. Vale para todas as
   perspectivas e plantas; não mexe em filme, tour ou tecnologia.
+- Preço de UM item: "institucional de 2 minutos por 15 mil" → o item vai como
+  {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Só
+  quando o usuário disse o número; sem número, mande só a descrição.
+
+FILME TEM VARIÁVEIS: duração, locução, 4K, quantidade de takes. A tabela é uma
+referência por tipo (institucional, conceito, produto/corretor, viral,
+documentário), não a regra. Escreva a duração na descrição ("de até 2:00") e
+pergunte o valor se o usuário não disser — não use o da tabela como se fosse
+fechado quando a duração é outra.
 
 {catalogo}
 
@@ -202,9 +211,20 @@ def _schema_estrutura(categorias: list[str]) -> dict:
     for cat in categorias:
         dona = _empresa_da_categoria(cat)
         properties[cat] = {
-            "type": "array", "items": {"type": "string"},
-            "description": f"[{dona}] Descrições dos itens da categoria '{cat}', uma entrada "
-                           f"por unidade. Use SÓ com emissor='{_emissor_da_categoria(cat)}'.",
+            "type": "array",
+            "items": {"anyOf": [
+                {"type": "string"},
+                {"type": "object",
+                 "properties": {"descricao": {"type": "string"},
+                                "preco": {"type": ["number", "null"],
+                                          "description": "Só quando o USUÁRIO disse o valor "
+                                                         "deste item. Nunca invente."}},
+                 "required": ["descricao"], "additionalProperties": False},
+            ]},
+            "description": f"[{dona}] Itens da categoria '{cat}', uma entrada por unidade: a "
+                           f"descrição (com duração, se houver) ou {{descricao, preco}} quando "
+                           f"o usuário fechou o valor daquele item. Use SÓ com "
+                           f"emissor='{_emissor_da_categoria(cat)}'.",
         }
     properties["desconto_pct"] = {"type": "number", "description": "Percentual de desconto (0 se não houver). Aparece na proposta como linha de desconto."}
     properties["desconto_label"] = {"type": ["string", "null"], "description": "Rótulo do desconto, se houver"}
@@ -326,7 +346,12 @@ def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> di
         itens = estrutura.get(chave)
         if not isinstance(itens, list):
             itens = []
-        estrutura[chave] = [str(item) for item in itens]
+        # String vira string; {descricao, preco} fica como está (o domínio lê os
+        # dois); qualquer outra coisa vira texto para não derrubar a rodada.
+        estrutura[chave] = [
+            item if isinstance(item, dict) and item.get("descricao") else str(item)
+            for item in itens if item not in (None, "")
+        ]
 
     # Emissor e tabela têm de fechar entre si: emissor inválido vira o padrão,
     # e tabela que não é da empresa escolhida vira a padrão DELA. Sem isso um

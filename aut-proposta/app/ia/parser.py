@@ -36,9 +36,25 @@ def _secoes_cabec(categorias: list[str] | tuple[str, ...]) -> dict[str, list[str
         if cat in _SECOES_CABEC_ESPECIAIS:
             secoes[cat] = list(_SECOES_CABEC_ESPECIAIS[cat])
         else:
-            nome_espaco = cat.replace("_", " ")
-            secoes[cat] = [rf"{re.escape(nome_espaco)}s?"]
+            # Categoria de outra empresa vem com prefixo (`rinno_filmes`,
+            # `nid_fachada`), mas ninguém escreve "Rinno filmes:" no pedido —
+            # escreve "Filmes:". O cabeçalho é o nome sem o prefixo; o nome
+            # completo continua valendo.
+            sem_prefixo = _sem_prefixo_de_emissor(cat)
+            padroes = [rf"{re.escape(sem_prefixo.replace('_', ' '))}s?"]
+            if sem_prefixo != cat:
+                padroes.append(rf"{re.escape(cat.replace('_', ' '))}s?")
+            secoes[cat] = padroes
     return secoes
+
+
+def _sem_prefixo_de_emissor(cat: str) -> str:
+    from app.empresas import EMISSORES
+
+    for emissor in EMISSORES:
+        if cat.startswith(f"{emissor}_"):
+            return cat[len(emissor) + 1:]
+    return cat
 
 
 # Mantido para compatibilidade/inspeção: padrões das 3 categorias históricas.
@@ -96,7 +112,27 @@ def _split_secoes(texto: str, categorias: list[str] | tuple[str, ...] | None = N
     return blocos
 
 
-def _extrai_lista(bloco: str) -> list[str]:
+# "Filme institucional de 2:00 = 15.000", "Filme conceito por 15 mil",
+# "Viral - R$ 4.500". Separador ":" fica de fora de propósito: "2:00" é duração.
+_RE_ITEM_COM_PRECO = re.compile(
+    r"^(?P<desc>.+?)\s*(?:=|\s[-–]\s|\bpor\b|R\$)\s*R?\$?\s*"
+    r"(?P<valor>\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{2})?\s*(?P<mil>mil|k)?\s*(?:reais)?\s*$", re.I)
+
+
+def _item_com_preco(item: str) -> str | dict[str, Any]:
+    """Item que termina em valor vira {descricao, preco}; o resto fica texto."""
+    m = _RE_ITEM_COM_PRECO.match(item)
+    if not m:
+        return item
+    valor = int(m.group("valor").replace(".", ""))
+    if m.group("mil"):
+        valor *= 1000
+    if valor < 50:  # "Fachada - 2" não é preço
+        return item
+    return {"descricao": m.group("desc").strip(), "preco": valor}
+
+
+def _extrai_lista(bloco: str) -> list:
     if not bloco:
         return []
     linhas = [l for l in bloco.splitlines() if l.strip()]
@@ -108,7 +144,7 @@ def _extrai_lista(bloco: str) -> list[str]:
     # Filtra itens que parecem ser metadata (desconto, estratégia, etc) ao invés de lista
     items = [i for i in items if not re.search(
         r"(?:desconto|planilha|hist[oó]rico|pre[cç]o|acr[eé]scimo|(?:por|a|cada)\s*imagem)", i, re.I)]
-    return items
+    return [_item_com_preco(i) for i in items]
 
 
 def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
@@ -233,6 +269,9 @@ Regras importantes:
 - "planilha + 10%", "10% em cima", "cliente novo" → ajuste_planilha_pct = 10;
   "planilha - 5%" → -5. É ajuste no preço dos itens, NÃO desconto.
 - "2.400 por imagem", "média de 2.200 a imagem" → preco_por_imagem = 2400 (número).
+- Item com valor dito pelo usuário ("institucional de 2:00 = 15.000") vai como
+  {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Sem valor
+  dito, só a descrição (string). NUNCA invente o número.
 - Se mencionar "preços individuais por imagem" ou "coluna de valor",
   mostrar_precos_individuais = true.
 - NUNCA invente preços ou valores em reais.

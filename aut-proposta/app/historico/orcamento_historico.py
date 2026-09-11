@@ -12,6 +12,7 @@ from app.dominio.orcamento import (
     Orcamento,
     descricao_final,
     e_categoria_de_imagem,
+    entrada_de_item,
 )
 from app.dominio.precos import TabelaPrecos
 from app.dominio.texto import normalizar
@@ -21,7 +22,7 @@ from app.historico.historico import Historico
 def orcar_pelo_historico(
     historico: Historico,
     cliente: str,
-    descricoes: dict[str, list[str]],
+    descricoes: dict[str, list],
     tabela: TabelaPrecos,
     preco_por_imagem: int | None = None,
 ) -> Orcamento | None:
@@ -36,7 +37,10 @@ def orcar_pelo_historico(
     }
 
     for cat in tabela.categorias():
-        for desc in descricoes.get(cat, []):
+        for entrada in descricoes.get(cat, []):
+            desc, informado = entrada_de_item(entrada)
+            if not desc:
+                continue
             chave = normalizar(desc)
             # A classificação vale pelo NOME do serviço mesmo quando o preço
             # vem do histórico: o cliente repete o preço, não a redação.
@@ -67,6 +71,8 @@ def orcar_pelo_historico(
             # é o número que o cliente aceitou desta vez.
             if preco_por_imagem is not None and e_categoria_de_imagem(cat, tabela):
                 preco, fonte = int(preco_por_imagem), "fixo_por_imagem"
+            if informado is not None:
+                preco, fonte = informado, "informado"
 
             cats[cat].itens.append(
                 ItemOrcado(

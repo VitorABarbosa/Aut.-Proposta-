@@ -133,3 +133,32 @@ def test_parser_local_le_preco_por_imagem():
     sem = parse(base)
     assert sem["preco_por_imagem"] is None
     assert sem["externas"] == ["Fachada", "Piscina"]  # a linha do preço não vira item
+
+
+def test_parser_local_le_preco_no_fim_do_item():
+    from app.ia.parser import parse
+    base = "Cliente: OUSY, ref Vila Mariana, a/c Yuri\n"
+    out = parse(base + "Filmes: Filme institucional de até 2:00 = 15.000, Filme corretor, Viral por 4.500\n",
+                categorias=["rinno_filmes", "rinno_takes"])
+    # "Filmes:" casa a categoria rinno_filmes pelo nome sem prefixo.
+    itens = out.get("rinno_filmes") or out.get("filmes")
+    assert itens[0] == {"descricao": "Filme institucional de até 2:00", "preco": 15000}
+    assert itens[1] == "Filme corretor"
+    assert itens[2] == {"descricao": "Viral", "preco": 4500}
+
+
+def test_parser_local_nao_confunde_duracao_com_preco():
+    from app.ia.parser import _item_com_preco
+    assert _item_com_preco("Filme institucional de até 2:00") == "Filme institucional de até 2:00"
+    assert _item_com_preco("Fachada - 2") == "Fachada - 2"
+    assert _item_com_preco("Filme conceito por 15 mil") == {"descricao": "Filme conceito", "preco": 15000}
+    assert _item_com_preco("Viral - R$ 4.500,00") == {"descricao": "Viral", "preco": 4500}
+
+
+def test_cabecalho_sem_prefixo_casa_categoria_da_rinno_e_da_nid():
+    from app.ia.parser import _split_secoes
+    blocos = _split_secoes("Filmes: Filme conceito\nTakes: Take IA\nFachada: Design de fachada",
+                           ["rinno_filmes", "rinno_takes", "nid_fachada"])
+    assert set(blocos) == {"rinno_filmes", "rinno_takes", "nid_fachada"}
+    # E o nome completo continua aceito.
+    assert "rinno_filmes" in _split_secoes("Rinno filmes: Filme conceito", ["rinno_filmes"])

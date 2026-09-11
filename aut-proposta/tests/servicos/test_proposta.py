@@ -394,3 +394,59 @@ def test_servico_com_duracao_mantem_a_redacao_do_usuario(db):
     item = out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]
     assert item["descricao"] == "Filme institucional de até 2:00"
     assert item["preco"] == 18000  # mas o preço é o do institucional
+
+
+# ---------- preço informado por item ----------
+
+
+def test_item_com_preco_fechado_usa_o_valor_dito(db):
+    """Turtitta: institucional de até 2:00 por 15.000 — a tabela diz 18.000 para
+    o institucional, e a duração é outra. O número vem de quem negociou."""
+    _prep(db)
+    est = _estrutura_rinno() | {
+        "rinno_filmes": [{"descricao": "Filme institucional de até 2:00", "preco": 15000},
+                         "Filme corretor"],
+        "rinno_takes": [],
+    }
+    out = svc.levantar(db, est)
+    itens = out["fechado"]["orcamento"]["rinno_filmes"]["itens"]
+    assert itens[0]["descricao"] == "Filme institucional de até 2:00"
+    assert itens[0]["preco"] == 15000 and itens[0]["fonte"] == "informado"
+    assert itens[1]["preco"] == 10000 and itens[1]["fonte"] == "planilha:filme_produto"
+    assert out["fechado"]["financeiro"]["total"] == 25000.0
+
+
+def test_preco_informado_ganha_do_preco_por_imagem_e_do_ajuste(db):
+    _prep(db)
+    est = _estrutura() | {
+        "preco_por_imagem": 2400, "ajuste_planilha_pct": 10,
+        "externas": [{"descricao": "Fachada noturna", "preco": 5000}, "Piscina"],
+    }
+    out = svc.levantar(db, est)
+    itens = out["fechado"]["orcamento"]["externas"]["itens"]
+    assert itens[0]["preco"] == 5000 and itens[0]["fonte"] == "informado"
+    assert itens[1]["preco"] == 2400 and itens[1]["fonte"] == "fixo_por_imagem"
+
+
+def test_preco_informado_ganha_do_historico(db, tmp_path, monkeypatch):
+    _prep(db)
+    monkeypatch.setattr(svc, "enviar_docx", lambda caminho, chave: None)
+    svc.gerar(db, _estrutura(), tmp_path)
+    est = _estrutura(estrategia="historico") | {
+        "externas": [{"descricao": "Fachada vista da calçada", "preco": 4200}]}
+    out = svc.levantar(db, est)
+    assert out["fechado"]["orcamento"]["externas"]["itens"][0]["preco"] == 4200
+
+
+def test_remap_de_categoria_preserva_o_preco_informado(db):
+    _prep(db)
+    est = _estrutura_rinno() | {"rinno_filmes": [],
+                                "filmes": [{"descricao": "Filme institucional de 2:00", "preco": 15000}]}
+    out = svc.levantar(db, est)
+    assert out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]["preco"] == 15000
+
+
+def test_preco_informado_negativo_e_erro(db):
+    _prep(db)
+    with pytest.raises(ValueError, match="preço informado inválido"):
+        svc.levantar(db, _estrutura() | {"externas": [{"descricao": "Fachada", "preco": -1}]})

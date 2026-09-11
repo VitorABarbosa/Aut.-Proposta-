@@ -126,7 +126,8 @@ def test_cliente_string_vira_objeto():
 def test_schema_estrutura_contem_categorias_dinamicas():
     schema = chat._schema_estrutura(["externas", "internas", "plantas", "filmes", "tecnologia"])
     filmes = schema["properties"]["filmes"]
-    assert filmes["type"] == "array" and filmes["items"] == {"type": "string"}
+    assert filmes["type"] == "array"
+    assert filmes["items"]["anyOf"][0] == {"type": "string"}  # ou {descricao, preco}
     # A descrição diz de quem é a categoria: foi `filmes` com emissor rinno que
     # deixou a proposta da Archtech sem preço.
     assert filmes["description"].startswith("[FLYING STUDIO]")
@@ -411,3 +412,21 @@ def test_schema_tem_ajuste_e_preco_por_imagem():
     assert schema["properties"]["preco_por_imagem"]["type"] == ["number", "null"]
     est = chat._completar_estrutura({"cliente": "GALLI"})
     assert est["ajuste_planilha_pct"] == 0 and est["preco_por_imagem"] is None
+
+
+def test_completar_estrutura_preserva_item_com_preco():
+    est = chat._completar_estrutura({
+        "cliente": "OUSY", "emissor": "rinno",
+        "rinno_filmes": [{"descricao": "Filme institucional de até 2:00", "preco": 15000},
+                         "Filme corretor", 7, None],
+    }, ["rinno_filmes"])
+    assert est["rinno_filmes"] == [
+        {"descricao": "Filme institucional de até 2:00", "preco": 15000}, "Filme corretor", "7"]
+
+
+def test_schema_aceita_item_como_string_ou_objeto_com_preco():
+    schema = chat._schema_estrutura(["rinno_filmes"])
+    itens = schema["properties"]["rinno_filmes"]["items"]
+    tipos = [alt.get("type") for alt in itens["anyOf"]]
+    assert tipos == ["string", "object"]
+    assert itens["anyOf"][1]["required"] == ["descricao"]

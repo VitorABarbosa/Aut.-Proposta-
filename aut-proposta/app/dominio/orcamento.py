@@ -134,8 +134,30 @@ def _descricao_e_so_o_nome(desc: str) -> bool:
     return len(norm.split()) <= 4 and not any(c.isdigit() for c in norm)
 
 
+def entrada_de_item(entrada: Any) -> tuple[str, int | None]:
+    """Um item da estrutura pode ser só a descrição ("Filme institucional de
+    2:00") ou {descricao, preco} quando a pessoa fechou o valor daquele item
+    ("institucional de 2 minutos por 15 mil"). Filme tem muitas variáveis —
+    duração, locução, 4K — e a tabela é uma referência por tipo, não a
+    regra; o número vem de quem negociou, nunca da IA.
+
+    Devolve (descricao, preco_informado ou None)."""
+    if isinstance(entrada, dict):
+        desc = str(entrada.get("descricao") or entrada.get("desc") or "").strip()
+        preco = entrada.get("preco")
+        try:
+            preco_int = int(round(float(preco))) if preco not in (None, "") else None
+        except (TypeError, ValueError):
+            preco_int = None
+        if preco_int is not None and preco_int < 0:
+            raise ValueError(f"preço informado inválido para '{desc}': {preco}")
+        return desc, preco_int
+    return str(entrada).strip(), None
+
+
 def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaPrecos,
-                ajuste_pct: float = 0.0, preco_por_imagem: int | None = None) -> tuple[int, str]:
+                ajuste_pct: float = 0.0, preco_por_imagem: int | None = None,
+                preco_informado: int | None = None) -> tuple[int, str]:
     """Preço de um item e a fonte que explica de onde ele saiu.
 
     Duas práticas da casa que a planilha sozinha não expressa:
@@ -146,6 +168,10 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
       negociação pode ser "planilha - 5%". Entra no preço do item, e por isso
       não aparece na proposta — diferente do desconto, que é linha visível.
     """
+    # O mais específico ganha: preço fechado deste item > preço por imagem >
+    # ajuste sobre a tabela > tabela.
+    if preco_informado is not None:
+        return preco_informado, "informado"
     if preco_por_imagem is not None and e_categoria_de_imagem(categoria, tabela):
         return int(preco_por_imagem), "fixo_por_imagem"
     if ajuste_pct:
@@ -155,7 +181,7 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
 
 
 def orcar_pela_planilha(
-    descricoes: dict[str, list[str]],
+    descricoes: dict[str, list[Any]],
     tabela: TabelaPrecos | None = None,
     ajuste_pct: float = 0.0,
     preco_por_imagem: int | None = None,
@@ -166,10 +192,13 @@ def orcar_pela_planilha(
     }
 
     for cat in tabela.categorias():
-        for desc in descricoes.get(cat, []):
+        for entrada in descricoes.get(cat, []):
+            desc, informado = entrada_de_item(entrada)
+            if not desc:
+                continue
             classif = tabela.classificar(desc, cat)
             preco, fonte = preco_final(classif["preco"], classif["chave"], cat, tabela,
-                                       ajuste_pct, preco_por_imagem)
+                                       ajuste_pct, preco_por_imagem, informado)
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
