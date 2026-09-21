@@ -1,0 +1,27 @@
+{
+  "origem": "Conversa real: '30 imagens a definir, tour virtual e maquete eletronica' para a Tavares e Rosseti. A IA precificou só o tour, respondeu que 'não consegui identificar as 30 imagens' e o preview acabou zerado (R$ 0,00, nenhum item).",
+  "turnos": [
+    "vamos fazer 30 imagens a definir, tour virtual e maquete eletronica. faremos para a tavares e rosseti. projeto fernando de noronha, a/c do luis",
+    "faremos 7"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "tavares",
+      "ref": "noronha",
+      "contato": "luis"
+    },
+    "quantidade_minima": 33,
+    "categorias": {
+      "externas": [
+        {"contem": "a definir"}
+      ],
+      "tour_virtual": [
+        {"contem": "elabora|render|360|mobile"}
+      ]
+    },
+    "nao_perguntar": [
+      "nao consegui identificar|quais imagens|liste quais|poderia listar"
+    ]
+  }
+}
