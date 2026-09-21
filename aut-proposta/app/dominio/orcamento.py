@@ -17,6 +17,19 @@ from app.dominio.texto import normalizar
 # Fallback só para compat de leitura antiga (sem conn/tabela disponível).
 CATEGORIAS_FALLBACK = ("externas", "internas", "plantas")
 
+# Categorias cujos itens do catálogo são ETAPAS do mesmo serviço, cada uma
+# cobrada POR AMBIENTE. No tour virtual as três linhas (elaboração, render,
+# web/mobile) valem para cada área de lazer: 7 áreas custam 7x cada etapa, e é
+# assim que as propostas saem ("Vista Virtual Web – Áreas de Lazer (7
+# ambientes)"). Diferente do projeto de interiores da NID, onde cada ambiente é
+# uma entrada da lista ("Piscina", "Academia") e a conta sai pela quantidade de
+# entradas — por isso a regra é por categoria, e não pela palavra "ambiente".
+CATEGORIAS_POR_AMBIENTE = ("tour_virtual",)
+
+
+def e_categoria_por_ambiente(categoria: str) -> bool:
+    return categoria in CATEGORIAS_POR_AMBIENTE
+
 
 @dataclass
 class ItemOrcado:
@@ -60,6 +73,10 @@ class CategoriaOrcada:
 class Orcamento:
     estrategia: str
     categorias: dict[str, CategoriaOrcada] = field(default_factory=dict)
+    # Quantidade de áreas do empreendimento, para as categorias cobradas por
+    # ambiente. Vai no dicionário porque o gerador do .docx precisa dela no
+    # título ("Vista Virtual Web – Áreas de Lazer (7 ambientes)").
+    ambientes: int = 1
 
     @property
     def subtotal(self) -> int:
@@ -74,6 +91,7 @@ class Orcamento:
             "estrategia": self.estrategia,
             "subtotal": self.subtotal,
             "total_imagens": self.total_imagens,
+            "ambientes": self.ambientes,
         }
         for nome, cat in self.categorias.items():
             out[nome] = cat.to_dict()
@@ -157,7 +175,7 @@ def entrada_de_item(entrada: Any) -> tuple[str, int | None]:
 
 def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaPrecos,
                 ajuste_pct: float = 0.0, preco_por_imagem: int | None = None,
-                preco_informado: int | None = None) -> tuple[int, str]:
+                preco_informado: int | None = None, ambientes: int = 1) -> tuple[int, str]:
     """Preço de um item e a fonte que explica de onde ele saiu.
 
     Duas práticas da casa que a planilha sozinha não expressa:
@@ -167,6 +185,10 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
     - ajuste sobre a planilha: cliente novo costuma ser "planilha + 10%";
       negociação pode ser "planilha - 5%". Entra no preço do item, e por isso
       não aparece na proposta — diferente do desconto, que é linha visível.
+    - `ambientes`: no tour virtual o preço é proporcional à quantidade de áreas
+      do empreendimento (7 áreas de lazer = 7x cada etapa). Multiplica o preço
+      de TABELA; preço informado pela pessoa fica como está, porque quem diz
+      "a vista virtual por 25 mil" está fechando a linha inteira, não a unidade.
     """
     # O mais específico ganha: preço fechado deste item > preço por imagem >
     # ajuste sobre a tabela > tabela.
@@ -174,10 +196,14 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
         return preco_informado, "informado"
     if preco_por_imagem is not None and e_categoria_de_imagem(categoria, tabela):
         return int(preco_por_imagem), "fixo_por_imagem"
+
+    vezes = ambientes if e_categoria_por_ambiente(categoria) and ambientes > 1 else 1
+    sufixo = f" x{vezes} ambientes" if vezes > 1 else ""
     if ajuste_pct:
         sinal = "+" if ajuste_pct > 0 else ""
-        return int(round(preco_catalogo * (1 + ajuste_pct / 100.0))), f"planilha{sinal}{ajuste_pct:g}%:{chave}"
-    return preco_catalogo, f"planilha:{chave}"
+        preco = int(round(preco_catalogo * (1 + ajuste_pct / 100.0))) * vezes
+        return preco, f"planilha{sinal}{ajuste_pct:g}%:{chave}{sufixo}"
+    return preco_catalogo * vezes, f"planilha:{chave}{sufixo}"
 
 
 def orcar_pela_planilha(
@@ -185,6 +211,7 @@ def orcar_pela_planilha(
     tabela: TabelaPrecos | None = None,
     ajuste_pct: float = 0.0,
     preco_por_imagem: int | None = None,
+    ambientes: int = 1,
 ) -> Orcamento:
     tabela = tabela or TabelaPrecos()
     cats: dict[str, CategoriaOrcada] = {
@@ -198,7 +225,7 @@ def orcar_pela_planilha(
                 continue
             classif = tabela.classificar(desc, cat)
             preco, fonte = preco_final(classif["preco"], classif["chave"], cat, tabela,
-                                       ajuste_pct, preco_por_imagem, informado)
+                                       ajuste_pct, preco_por_imagem, informado, ambientes)
             cats[cat].itens.append(
                 ItemOrcado(
                     descricao=desc,
@@ -209,7 +236,7 @@ def orcar_pela_planilha(
                 )
             )
 
-    return Orcamento(estrategia="planilha", categorias=cats)
+    return Orcamento(estrategia="planilha", categorias=cats, ambientes=max(1, ambientes))
 
 
 def fechar_orcamento(orcamento: Orcamento, desconto: "Desconto | None" = None) -> dict[str, Any]:

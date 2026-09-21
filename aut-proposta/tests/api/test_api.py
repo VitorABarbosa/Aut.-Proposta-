@@ -330,3 +330,30 @@ def test_propostas_listadas_trazem_a_empresa(cliente_api):
 
     listadas = cliente_api.get("/propostas", headers=HEAD).json()["propostas"]
     assert listadas[0]["emissor"] == "rinno"
+
+
+def test_tour_virtual_cobra_a_quantidade_de_areas(cliente_api):
+    """"o valor é proporcional à quantidade de áreas" — e a quantidade tem de
+    ter sido perguntada, não presumida."""
+    base = {"cliente": {"empresa": "MASKIN", "ref": "Aricanduva", "contato": "Marcelo"},
+            "emissor": "flying", "tabela_precos": "padrao",
+            "tour_virtual": ["Elaboração 3d", "Render 360 VR", "Versão mobile offline"]}
+
+    sem = cliente_api.post("/levantamento", json={"estrutura": base}, headers=HEAD).json()
+    assert any("por ambiente" in a for a in sem["avisos"])
+    assert any("quantas áreas" in p for p in sem["pendencias"])
+    um_ambiente = sem["fechado"]["orcamento"]["subtotal"]
+
+    com = cliente_api.post("/levantamento", json={"estrutura": {**base, "ambientes": 7}},
+                           headers=HEAD).json()
+    assert com["fechado"]["orcamento"]["subtotal"] == um_ambiente * 7
+    # Respondido, deixa de ser pendência — mas o aviso continua conferindo o número.
+    assert not any("quantas áreas" in p for p in com["pendencias"])
+    assert any("7 ambiente" in a for a in com["avisos"])
+
+
+def test_ambientes_invalido_e_erro_de_entrada(cliente_api):
+    estrutura = {"cliente": {"empresa": "MASKIN", "ref": "Aricanduva", "contato": "Marcelo"},
+                 "tour_virtual": ["Render 360 VR"], "ambientes": -3}
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 422

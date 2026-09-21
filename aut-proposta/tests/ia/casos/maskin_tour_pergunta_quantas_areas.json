@@ -1,0 +1,17 @@
+{
+  "origem": "Regra da casa, dita pelo Vitor: a vista virtual é cobrada por ambiente, então a quantidade de áreas do empreendimento tem de ser SEMPRE perguntada — o valor é proporcional. A IA precificou um tour sem perguntar nada.",
+  "turnos": [
+    "faça uma proposta de um tour virtual das areas comuns. sera para a empresa maskin, projeto aricanduva, enviarei para o marcelo"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "maskin",
+      "ref": "aricanduva",
+      "contato": "marcelo"
+    },
+    "perguntar": [
+      "quantas areas|quantos ambientes|quantidade de areas|quantas áreas|quantos ambientes de lazer"
+    ]
+  }
+}

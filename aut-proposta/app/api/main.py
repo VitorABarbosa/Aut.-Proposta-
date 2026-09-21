@@ -131,6 +131,16 @@ def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
         pend.append("Informe o A/C — responsável que recebe a proposta.")
     if fechado["orcamento"]["total_imagens"] == 0:
         pend.append("Nenhum item identificado — liste as imagens/serviços contratados.")
+
+    # Tour virtual é proporcional à quantidade de áreas de lazer: sem esse
+    # número a proposta sai com o valor de um ambiente só. Pendência (e não
+    # aviso) porque a quantidade tem de ter sido perguntada, não presumida.
+    from app.dominio.orcamento import e_categoria_por_ambiente
+    if estrutura.get("ambientes") in (None, "") and any(
+            e_categoria_por_ambiente(cat) and bloco.get("qtd")
+            for cat, bloco in fechado["orcamento"].items() if isinstance(bloco, dict)):
+        pend.append("Informe quantas áreas/ambientes o empreendimento tem — "
+                    "o tour virtual é cobrado por ambiente.")
     # Item que a tabela não cobre (ou tabela vazia) entra com zero: a pessoa
     # informa o valor — no chat ("por 4 mil") ou clicando no preço no preview.
     for cat, bloco in fechado["orcamento"].items():
