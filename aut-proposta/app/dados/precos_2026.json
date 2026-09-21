@@ -32,7 +32,8 @@
   {"nome": "tecnologia", "ordem": 8, "rotulo": "Tecnologias Interativas", "prefixo": "",
    "default": 22800, "descricao_padrao": "Desenvolvimento de Aplicação Web para Tela Touch", "itens": [
     {"chave": "app_web_touch", "descricao": "Desenvolvimento de Aplicação Web — para Tela Touch", "preco": 22800, "padroes": ["aplicativo", "aplicacao", "aplicação", "app", "touch"]},
-    {"chave": "explorador_dbrave", "descricao": "Explorador D.Brave", "preco": 39000, "padroes": ["explorador", "d\\.?brave"]}]}
+    {"chave": "explorador_dbrave", "descricao": "Explorador D.Brave", "preco": 39000, "padroes": ["explorador", "d\\.?brave"]},
+    {"chave": "maquete_eletronica", "descricao": "Maquete Eletrônica", "preco": 25000, "padroes": ["maquete"]}]}
 ]},
  "mcmv": {"categorias": [
   {"nome": "externas", "ordem": 1, "rotulo": "Ilustrações Externas", "prefixo": "Perspectiva ",

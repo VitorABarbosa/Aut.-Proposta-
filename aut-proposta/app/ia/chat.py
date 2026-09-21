@@ -109,6 +109,9 @@ você):
 - `preco_por_imagem`: "2.400 por imagem", "média de 2.200 a imagem", "mesmo
   valor por imagem do projeto anterior" → o número. Vale para todas as
   perspectivas e plantas; não mexe em filme, tour ou tecnologia.
+- `total_fechado`: valor final da proposta inteira, quando o usuário fecha o
+  total ("fechamos por 100 mil", "o total fica em 85 mil"). O desconto passa a
+  ser a diferença até esse número. Diferente do preço de UM item.
 - `ambientes`: quantidade de áreas do empreendimento. Veja a regra abaixo.
 - Preço de UM item: "institucional de 2 minutos por 15 mil" → o item vai como
   {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Só
@@ -121,6 +124,13 @@ um tour/vista virtual, pergunte "quantas áreas de lazer o empreendimento tem?"
 e ponha o número em `ambientes`. Esta é a ÚNICA quantidade que você pergunta —
 é exceção à regra de uma unidade por item, porque aqui o número muda o preço e
 só o usuário sabe quantas áreas o projeto tem. Nunca presuma 1.
+
+TUDO É NEGOCIÁVEL — A TABELA É BASE, NUNCA VERDADE ABSOLUTA. Qualquer preço
+pode ser escrito à mão: o de um item ("a maquete por 20 mil" → o item vai com
+preco: 20000), o de todas as imagens (`preco_por_imagem`), um percentual em
+cima ou embaixo (`ajuste_planilha_pct`) e o total fechado (`total_fechado`).
+Quando o usuário der um número, é ele que vale — não discuta com a tabela e
+não avise que "o valor de tabela é outro" a menos que perguntem.
 
 FILME TEM VARIÁVEIS: duração, locução, 4K, quantidade de takes. A tabela é uma
 referência por tipo (institucional, conceito, produto/corretor, viral,
@@ -350,6 +360,13 @@ def _schema_estrutura(categorias: list[str], emissor: str | None = None) -> dict
         "description": "Preço fixo por imagem, em reais, quando o cliente fecha um valor único "
                        "para todas as perspectivas e plantas (ex.: 'R$ 2.400 a imagem'). "
                        "null se não houver. Só afeta categorias de imagem.",
+    }
+    properties["total_fechado"] = {
+        "type": ["number", "null"],
+        "description": "Valor FINAL negociado da proposta inteira, em reais, quando o usuário "
+                       "fecha o total ('fechamos por 100 mil', 'o total fica em 85 mil'). "
+                       "O desconto vira a diferença entre a soma dos itens e este número. "
+                       "null se não houver. Não confundir com o preço de UM item.",
     }
     properties["ambientes"] = {
         "type": ["integer", "null"],

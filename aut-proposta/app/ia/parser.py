@@ -81,6 +81,12 @@ _RE_PRECO_IMAGEM = re.compile(
 # o tour virtual. Só o número em algarismo — por extenso é pergunta, não palpite.
 _RE_AMBIENTES = re.compile(
     r"(\d{1,2})\s*(?:ambientes?|[aá]reas?(?:\s+de\s+lazer)?)\b", re.I)
+# "fechamos por 100 mil", "o total fica em R$ 85.000": o valor final da
+# proposta inteira. Exige o verbo de fechar/total perto do número para não
+# confundir com o preço de um item solto.
+_RE_TOTAL_FECHADO = re.compile(
+    r"(?:fecha(?:mos|do|r)?|total)\s*(?:a\s*proposta\s*)?(?:fica\s*)?"
+    r"(?:por|em|de|:)?\s*(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+|\d{2,7})\s*(mil)?", re.I)
 _RE_PRECOS_IND = re.compile(r"pre[cç]os?\s*(?:individuais?|por\s*item|por\s*imagem)|coluna\s*de\s*(?:pre[cç]o|valor)", re.I)
 
 _CAPS_IGNORAR = {"EXTERNAS", "INTERNAS", "PLANTAS", "REF", "PROJETO", "CLIENTE",
@@ -213,6 +219,11 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
     if m:
         ambientes = int(m.group(1))
 
+    total_fechado = None
+    m = _RE_TOTAL_FECHADO.search(texto)
+    if m:
+        total_fechado = int(m.group(1).replace(".", "")) * (1000 if m.group(2) else 1)
+
     estrategia = "auto"
     if _RE_ESTRATEGIA_PLAN.search(texto):
         estrategia = "planilha"
@@ -238,6 +249,7 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
         "ajuste_planilha_pct": ajuste_pct,
         "preco_por_imagem": preco_por_imagem,
         "ambientes": ambientes,
+        "total_fechado": total_fechado,
         "estrategia": estrategia,
         "mostrar_precos_individuais": bool(_RE_PRECOS_IND.search(texto)),
         "_origem": "local",
