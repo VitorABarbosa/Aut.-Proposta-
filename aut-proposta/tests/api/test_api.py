@@ -357,3 +357,54 @@ def test_ambientes_invalido_e_erro_de_entrada(cliente_api):
                  "tour_virtual": ["Render 360 VR"], "ambientes": -3}
     r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
     assert r.status_code == 422
+
+
+def test_maquete_eletronica_tem_preco_de_tabela(cliente_api):
+    """25 mil de base, cadastrada no catálogo — antes entrava com R$ 0,00."""
+    estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+                 "tecnologia": ["Maquete eletrônica"]}
+    corpo = cliente_api.post("/levantamento", json={"estrutura": estrutura},
+                             headers=HEAD).json()
+    item = corpo["fechado"]["orcamento"]["tecnologia"]["itens"][0]
+    assert item["preco"] == 25000
+    assert "maquete" in item["fonte"]
+
+
+def test_qualquer_preco_pode_ser_escrito_a_mao(cliente_api):
+    """A tabela é base: o preço do item dito pela pessoa manda nela."""
+    estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+                 "tecnologia": [{"descricao": "Maquete eletrônica", "preco": 20000}]}
+    corpo = cliente_api.post("/levantamento", json={"estrutura": estrutura},
+                             headers=HEAD).json()
+    item = corpo["fechado"]["orcamento"]["tecnologia"]["itens"][0]
+    assert (item["preco"], item["fonte"]) == (20000, "informado")
+
+
+def test_total_fechado_manda_no_investimento(cliente_api):
+    """"fechamos por 100 mil": o desconto vira a diferença até esse número."""
+    estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+                 "tecnologia": ["Maquete eletrônica", "Explorador D.Brave"],
+                 "total_fechado": 50000, "desconto_label": "parceria"}
+    fin = cliente_api.post("/levantamento", json={"estrutura": estrutura},
+                           headers=HEAD).json()["fechado"]["financeiro"]
+    assert fin["subtotal"] == 64000          # 25.000 + 39.000
+    assert fin["total"] == 50000
+    assert fin["desconto_valor"] == 14000
+    assert fin["rotulo"] == "parceria"
+
+
+def test_total_fechado_vence_o_desconto_percentual(cliente_api):
+    estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+                 "tecnologia": ["Maquete eletrônica"],
+                 "desconto_pct": 50, "total_fechado": 24000}
+    fin = cliente_api.post("/levantamento", json={"estrutura": estrutura},
+                           headers=HEAD).json()["fechado"]["financeiro"]
+    assert fin["total"] == 24000             # e não 12.500
+
+
+def test_total_fechado_acima_da_soma_explica_o_que_fazer(cliente_api):
+    estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+                 "tecnologia": ["Maquete eletrônica"], "total_fechado": 90000}
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 422
+    assert "maior que a soma dos itens" in r.json()["detail"]

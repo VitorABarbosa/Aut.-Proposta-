@@ -183,12 +183,30 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     orc.ambientes = max(1, ambientes or 1)
     _acrescentar_fora_da_tabela(orc, fora_da_tabela)
 
+    # Valor fechado da proposta: "fechamos por 100 mil". A tabela é base, e o
+    # número que o cliente vê é o que foi negociado — então o total pode ser
+    # escrito à mão, e o desconto vira a diferença em reais (o domínio já sabia
+    # fazer isso; faltava alguém pedir).
+    #
+    # Fechar o total manda no desconto percentual: quem digita o valor final
+    # está dizendo o que quer ver na proposta.
+    total_fechado = _inteiro_ou_none(estrutura.get("total_fechado"))
+    rotulo = estrutura.get("desconto_label") or ""
     desconto = None
-    if estrutura.get("desconto_pct", 0):
+    if total_fechado is not None:
+        subtotal = orc.subtotal
+        if total_fechado > subtotal:
+            raise ValueError(
+                f"O valor fechado (R$ {total_fechado:,}) é maior que a soma dos itens "
+                f"(R$ {subtotal:,}). Suba o preço de um item ou use o ajuste de planilha — "
+                "o total fechado só desconta.".replace(",", ".")
+            )
+        desconto = Desconto(tipo="valor", valor=float(subtotal - total_fechado), rotulo=rotulo)
+    elif estrutura.get("desconto_pct", 0):
         desconto = Desconto(
             tipo="percentual",
             valor=float(estrutura["desconto_pct"]),
-            rotulo=estrutura.get("desconto_label") or "",
+            rotulo=rotulo,
         )
 
     return {
