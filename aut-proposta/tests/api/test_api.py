@@ -33,10 +33,44 @@ def cliente_api(db, tmp_path, monkeypatch):
     return TestClient(app)
 
 
-def test_saude_sem_auth(cliente_api):
+def test_saude_sem_auth_diz_se_o_schema_esta_em_dia(cliente_api):
+    """O 500 mudo do Gerar só foi diagnosticável olhando log. /saude responde
+    direto: banco de pé, schema em dia, PDF e R2 disponíveis."""
     r = cliente_api.get("/saude")
     assert r.status_code == 200
-    assert r.json() == {"ok": True}
+    estado = r.json()
+    assert estado["ok"] is True
+    assert estado["banco"] == "ok"
+    assert estado["schema"] == "em dia"
+    assert "pdf" in estado and "r2" in estado
+
+
+def test_saude_aponta_a_coluna_que_falta(cliente_api, db):
+    """O sintoma real: preview funcionava (só lê) e Gerar dava 500 (escreve)."""
+    with db.cursor() as cur:
+        cur.execute("ALTER TABLE propostas DROP COLUMN IF EXISTS emissor")
+    db.commit()
+    try:
+        estado = cliente_api.get("/saude").json()
+        assert estado["ok"] is False
+        assert "propostas.emissor" in estado["schema"]
+    finally:
+        aplicar_schema(db)
+
+
+def test_gerar_com_banco_atrasado_diz_o_que_fazer(cliente_api, db):
+    """Em vez de "Erro 500: Internal Server Error", a mensagem manda migrar."""
+    with db.cursor() as cur:
+        cur.execute("ALTER TABLE propostas DROP COLUMN IF EXISTS emissor")
+    db.commit()
+    try:
+        r = cliente_api.post("/propostas", json={"texto": TEXTO}, headers=HEAD)
+        assert r.status_code == 503
+        detalhe = r.json()["detail"]
+        assert "banco está atrás do código" in detalhe
+        assert "migrar_catalogo_2026" in detalhe
+    finally:
+        aplicar_schema(db)
 
 
 def test_sem_token_configurado_da_503(db, monkeypatch):

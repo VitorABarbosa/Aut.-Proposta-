@@ -6,21 +6,57 @@ Sem API_TOKEN no ambiente as rotas protegidas devolvem 503 — nunca abrem.
 from __future__ import annotations
 
 import hmac
+import logging
 import os
 import re
+import shutil
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from app.db.conexao import get_conn
 from app.db.repo_propostas import excluir_proposta, listar_propostas
+from app.db.schema import aplicar_schema
 from app.docx.pdf import converter_para_pdf
 from app.servicos.proposta import gerar, levantar, parse_texto
 from app.storage.r2 import excluir_objetos
 
-app = FastAPI(title="Automação de Proposta — Flying Studio")
+log = logging.getLogger("aut_proposta")
+
+
+@asynccontextmanager
+async def _ciclo_de_vida(app: FastAPI):
+    """Aplica o schema no boot.
+
+    O deploy não tem passo de migração: o Dockerfile sobe o uvicorn e pronto.
+    Sem isto, uma coluna nova deixava o banco de produção para trás e o
+    sintoma era traiçoeiro — o preview continuava funcionando (só lê) e o
+    Gerar quebrava com 500 (escreve). Foi o que aconteceu com `emissor`.
+
+    O DDL é idempotente (CREATE/ALTER ... IF NOT EXISTS), então rodar a cada
+    boot não custa nada. Falha aqui não derruba a API: o container sobe, e
+    /saude diz o que está faltando.
+    """
+    try:
+        conn = _abrir_conn()
+    except Exception:  # noqa: BLE001 — sem DATABASE_URL, ou banco fora
+        log.exception("Schema não aplicado no boot: não consegui abrir o banco")
+    else:
+        try:
+            aplicar_schema(conn)
+            log.info("Schema aplicado no boot.")
+        except Exception:  # noqa: BLE001
+            log.exception("Schema não aplicado no boot")
+        finally:
+            _fechar_conn(conn)
+    yield
+
+
+app = FastAPI(title="Automação de Proposta — Flying Studio", lifespan=_ciclo_de_vida)
 
 MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -106,9 +142,73 @@ def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
     return pend
 
 
+def _erro_de_banco(exc: psycopg.Error) -> str:
+    """Mensagem que diz o que fazer, em vez de "Internal Server Error".
+
+    Coluna ou tabela que falta é sempre a mesma história: o código subiu e o
+    banco não acompanhou.
+    """
+    if isinstance(exc, (psycopg.errors.UndefinedColumn, psycopg.errors.UndefinedTable)):
+        return ("O banco está atrás do código (falta coluna ou tabela). "
+                "Rode 'python -m scripts.migrar_catalogo_2026' com a DATABASE_URL "
+                "de produção — ou reinicie o serviço, que ele aplica o schema no boot.")
+    return ("O banco recusou a operação. Tente de novo; se continuar, veja os "
+            "logs do serviço de propostas.")
+
+
+def _falhou(acao: str, exc: Exception) -> HTTPException:
+    """Registra o traceback e devolve uma mensagem que o usuário pode agir."""
+    log.exception("Falha ao %s", acao)
+    if isinstance(exc, psycopg.Error):
+        return HTTPException(503, _erro_de_banco(exc))
+    return HTTPException(500, f"Não consegui {acao}: {type(exc).__name__}. "
+                              "O erro completo está nos logs do serviço.")
+
+
 @app.get("/saude")
 def saude():
-    return {"ok": True}
+    """Diagnóstico do serviço: o que está de pé e o que falta.
+
+    Existe para não depender de log quando o Gerar volta 500: a resposta diz
+    se o banco responde, se o schema está em dia, se dá para converter PDF e
+    se o R2 está configurado.
+    """
+    estado: dict = {"ok": True, "banco": "sem DATABASE_URL", "schema": "não conferido",
+                    "pdf": "ok" if (shutil.which("soffice") or shutil.which("libreoffice"))
+                           else "LibreOffice ausente — download em PDF indisponível",
+                    "r2": "ok" if os.getenv("R2_BUCKET") else "não configurado (download direto)",
+                    "saidas": str(_dir_saida())}
+    try:
+        conn = _abrir_conn()
+    except Exception as exc:  # noqa: BLE001
+        estado["banco"] = f"indisponível: {type(exc).__name__}"
+        estado["ok"] = False
+        return estado
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.execute("""SELECT column_name FROM information_schema.columns
+                           WHERE table_name = 'propostas'""")
+            colunas = {linha[0] for linha in cur.fetchall()}
+            cur.execute("""SELECT table_name FROM information_schema.tables
+                           WHERE table_name IN ('propostas', 'preco_item', 'chat_log')""")
+            tabelas = {linha[0] for linha in cur.fetchall()}
+        estado["banco"] = "ok"
+        faltando = ([f"coluna propostas.{c}" for c in ("emissor", "tabela_precos")
+                     if c not in colunas]
+                    + [f"tabela {t}" for t in ("propostas", "preco_item", "chat_log")
+                       if t not in tabelas])
+        if faltando:
+            estado["schema"] = "atrasado — falta: " + ", ".join(faltando)
+            estado["ok"] = False
+        else:
+            estado["schema"] = "em dia"
+    except Exception as exc:  # noqa: BLE001
+        estado["banco"] = f"erro: {type(exc).__name__}"
+        estado["ok"] = False
+    finally:
+        _fechar_conn(conn)
+    return estado
 
 
 @app.post("/levantamento", dependencies=[Depends(verificar_token)])
@@ -120,6 +220,8 @@ def rota_levantamento(corpo: CorpoLevantamento):
         lev = levantar(conn, estrutura)
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
+    except Exception as e:  # noqa: BLE001 — vira mensagem, não "Internal Server Error"
+        raise _falhou("montar o preview", e) from None
     finally:
         _fechar_conn(conn)
     return {
@@ -141,6 +243,8 @@ def rota_gerar(corpo: CorpoProposta):
         out = gerar(conn, estrutura, _dir_saida())
     except ValueError as e:  # desconto fora de faixa etc. — entrada do usuário, não erro interno
         raise HTTPException(422, str(e))
+    except Exception as e:  # noqa: BLE001 — vira mensagem, não "Internal Server Error"
+        raise _falhou("gerar a proposta", e) from None
     finally:
         _fechar_conn(conn)
     return {
