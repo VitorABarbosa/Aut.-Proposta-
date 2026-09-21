@@ -1,0 +1,34 @@
+{
+  "origem": "Prática da casa: cliente novo é planilha + 10%.",
+  "turnos": [
+    "cliente novo, planilha mais 10%: GALLI, ref Residencial Aurora, A/C Daniel, 3 externas (fachada, piscina, playground) e uma academia"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "galli",
+      "ref": "aurora",
+      "contato": "daniel"
+    },
+    "ajuste_planilha_pct": 10,
+    "desconto_pct": 0,
+    "categorias": {
+      "externas": [
+        {
+          "contem": "fachada"
+        },
+        {
+          "contem": "piscina"
+        },
+        {
+          "contem": "playground"
+        }
+      ],
+      "internas": [
+        {
+          "contem": "academia"
+        }
+      ]
+    }
+  }
+}

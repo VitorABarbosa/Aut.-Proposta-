@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 import psycopg
 
+from app.db.repo_chat_log import registrar_rodada
 from app.db.repo_precos import carregar_tabela_precos
 from app.db.repo_propostas import listar_propostas, obter_estrutura_de_proposta
 from app.dominio.precos import TabelaPrecos
@@ -43,24 +45,24 @@ empreendimento (ref), A/C (quem recebe) e os itens — organizados pelas
 categorias do CATÁLOGO OFICIAL abaixo. O usuário pode mandar tudo de uma vez ou
 aos poucos — pergunte SÓ o que faltar, uma coisa por vez.
 
-AS TRÊS EMPRESAS (campo `emissor`):
-- flying — Flying Studio: imagens, plantas, filmes 3D, tour virtual, drone e
-  tecnologias interativas (D.sbrave, web touch).
-- rinno — Rinno Films: filmes publicitários (conceito, produto/corretor, viral,
-  institucional, documentário) e takes animados.
-- nid — NID Studio: projeto de interiores, design de fachada, stand de vendas
-  (PDV), apto modelo decorado e desenvolvimento de produto.
+AS TRÊS EMPRESAS — cada uma tem a SUA ferramenta de precificação:
+- precificar_flying — Flying Studio: imagens, plantas, filmes 3D, tour
+  virtual, drone e tecnologias interativas (D.sbrave, web touch).
+- precificar_rinno — Rinno Films: filmes publicitários (conceito,
+  produto/corretor, viral, institucional, documentário) e takes animados.
+- precificar_nid — NID Studio: projeto de interiores, design de fachada, stand
+  de vendas (PDV), apto modelo decorado e desenvolvimento de produto.
+Escolher a ferramenta É escolher a empresa. Filme institucional, conceito,
+produto, corretor, viral e documentário são SEMPRE precificar_rinno.
 
 O mesmo cliente costuma receber proposta de mais de uma empresa, mas CADA
 PROPOSTA É DE UMA EMPRESA SÓ. Se o pedido misturar serviços de empresas
 diferentes (ex.: imagens + filme da Rinno), avise e pergunte por qual começar —
 depois é só fazer a outra.
 
-CATEGORIA CERTA PARA A EMPRESA CERTA: cada categoria do catálogo pertence a UMA
-empresa (o nome dela está no cabeçalho de cada bloco abaixo). Com emissor=rinno,
-filme vai em `rinno_filmes` — NUNCA em `filmes`, que é o filme 3D da Flying.
-Com emissor=nid, use só `nid_*`. Filme institucional, conceito, produto,
-corretor, viral e documentário são SEMPRE da Rinno.
+UMA UNIDADE POR ITEM, SALVO SE DITO: filme, tour, projeto e app são um por
+pedido — "um filme institucional" é UM item; não pergunte "quantas unidades".
+Imagem é por cena: "três fachadas" são três entradas.
 
 PREÇO FORA DA PLANILHA (dois campos, os dois em código, nunca calculados por
 você):
@@ -92,8 +94,8 @@ COMO ENTENDER O PEDIDO (releia a conversa inteira antes de responder):
   unidades; "mais duas" soma às que já existem; "tira uma" subtrai.
 - Correção é ordem: "na verdade são 4", "troca o A/C pra Ana", "esquece as
   plantas" — aplique a mudança sobre a estrutura atual e precifique de novo.
-- Sempre que a estrutura mudar, chame precificar_proposta de novo: o preview ao
-  lado é o resultado da ÚLTIMA chamada, não do que você escreveu na mensagem.
+- Sempre que a estrutura mudar, chame a ferramenta de precificação de novo: o
+  preview ao lado é o resultado da ÚLTIMA chamada, não do que você escreveu.
 - Se não entendeu o pedido, pergunte o que faltou em uma frase — não responda
   por aproximação nem mude de assunto.
 
@@ -115,15 +117,17 @@ pergunte.
 
 REGRAS INEGOCIÁVEIS:
 - Você NUNCA inventa nem calcula preço/valor. Todo número vem das ferramentas.
-- Para precificar (mesmo parcial), chame precificar_proposta com a estrutura no
-  formato: emissor = flying|rinno|nid; cliente = {{empresa, ref, contato}}; cada
-  categoria do catálogo (nome entre parênteses acima, ex.: externas/internas/
-  rinno_filmes/nid_interiores/...) = lista de descrições de itens (uma string
-  por unidade, repita a descrição se houver mais de uma unidade igual).
+- Se uma ferramenta devolver {{"erro": ...}}, repasse o texto do erro ao usuário
+  como está. Não troque por uma causa que você imaginou ("a categoria não foi
+  reconhecida") nem peça para ele reformular: o erro já diz o que fazer.
+- Para precificar (mesmo parcial), chame a ferramenta DA EMPRESA com a
+  estrutura: cliente = {{empresa, ref, contato}}; cada categoria dela (nome
+  entre parênteses no catálogo) = lista de itens (uma entrada por unidade,
+  repita se houver mais de uma unidade igual).
 - Para consultar propostas antigas, chame listar_propostas_cliente (sem o nome
   do cliente ela devolve as mais recentes de todos).
 - Para copiar uma proposta mudando algo, chame carregar_proposta, ajuste a
-  estrutura conforme o pedido e chame precificar_proposta.
+  estrutura conforme o pedido e chame a ferramenta de precificação da empresa.
 - MEMÓRIA DE FERRAMENTAS: você NÃO guarda resultados de ferramentas entre
   mensagens — a cada mensagem nova, ids e dados de propostas antigas precisam
   ser reobtidos. Se o usuário pedir para copiar/carregar e você não tiver o id
@@ -132,6 +136,30 @@ REGRAS INEGOCIÁVEIS:
   sem antes relistar.
 - Depois de precificar, resuma os valores devolvidos e diga que o preview ao lado
   foi atualizado; se não houver pendências, diga que é só clicar em Gerar.
+
+EXEMPLOS (pedidos reais → chamada certa; copie o padrão):
+1. "filme viral pra archtech, projeto GOIANIA, A/C Luis, cobre 4k pelo filme"
+   → precificar_rinno {{cliente: {{empresa: "Archtech", ref: "Goiânia", contato:
+   "Luis"}}, rinno_filmes: [{{descricao: "Filme viral de até 1:00", preco: 4000}}]}}
+2. "institucional de 2 minutos pra Turtita, A/C Madeleine, fechamos 15 mil"
+   → precificar_rinno {{..., rinno_filmes: [{{descricao: "Filme institucional de
+   até 2:00", preco: 15000}}]}} — a duração vai na descrição e o valor é o dito.
+3. "Rinno pra OUSY, Vila Mariana, A/C Yuri: um conceito, um corretor e um viral"
+   → precificar_rinno {{..., rinno_filmes: ["Filme conceito", "Filme corretor",
+   "Filme viral"]}} — três itens, sem perguntar quantidade nem valor.
+4. "Flying pra UNICOS, João Casseb, A/C Manoela: fotomontagem masterplan, voo de
+   pássaro fase 01, praça de lazer; plantas: implantação masterplan. 2.400 por
+   imagem" → precificar_flying {{..., externas: ["Fotomontagem masterplan", "Voo
+   de pássaro fase 01", "Praça de lazer"], plantas: ["Implantação masterplan"],
+   preco_por_imagem: 2400}}
+5. "cliente novo, planilha mais 10%: GALLI, Aurora, A/C Daniel, 3 externas
+   (fachada, piscina, playground)" → precificar_flying {{..., externas:
+   ["Fachada", "Piscina", "Playground"], ajuste_planilha_pct: 10}} — ajuste, não
+   desconto: desconto_pct fica 0.
+6. "NID pra OUSY, Vila Mariana, A/C Yuri: design de fachada, apto modelo 3 dorm,
+   interiores da piscina e da academia" → precificar_nid {{..., nid_fachada:
+   ["Design de fachada"], nid_interiores: ["Apto modelo decorado 3 dorm",
+   "Piscina (área comum)", "Academia (área comum)"]}}
 
 FORMATO DAS RESPOSTAS:
 - Texto simples, SEM markdown: nada de **negrito**, títulos, tabelas ou colchetes
@@ -186,18 +214,22 @@ def _tabela_unificada(catalogos: dict[str, TabelaPrecos]) -> TabelaPrecos:
     return TabelaPrecos(dados)
 
 
-def _schema_estrutura(categorias: list[str]) -> dict:
-    """Gera o JSON Schema da ferramenta precificar_proposta para as categorias
-    ativas do catálogo das três empresas (uma propriedade array-de-string por
-    categoria) + emissor e tabela_precos."""
-    properties: dict[str, Any] = {
-        "emissor": {
+def _schema_estrutura(categorias: list[str], emissor: str | None = None) -> dict:
+    """JSON Schema da estrutura de precificação.
+
+    Com `emissor`, é o schema da ferramenta daquela empresa: só as categorias
+    dela, só as tabelas dela, e sem campo `emissor` — a ferramenta já diz de
+    quem é. Sem `emissor` (compatibilidade), o schema genérico com todas as
+    categorias e o campo `emissor` obrigatório."""
+    properties: dict[str, Any] = {}
+    if emissor is None:
+        properties["emissor"] = {
             "type": "string", "enum": list(EMPRESAS),
             "description": "Empresa do grupo que emite esta proposta: "
                            "'flying' (imagens/3D), 'rinno' (filmes) ou "
                            "'nid' (projeto de interiores).",
-        },
-        "cliente": {
+        }
+    properties["cliente"] = {
             "type": "object",
             "description": "Dados do cliente da proposta.",
             "properties": {
@@ -206,7 +238,6 @@ def _schema_estrutura(categorias: list[str]) -> dict:
                 "contato": {"type": "string", "description": "A/C — quem recebe"},
             },
             "required": ["empresa"],
-        },
     }
     for cat in categorias:
         dona = _empresa_da_categoria(cat)
@@ -242,7 +273,8 @@ def _schema_estrutura(categorias: list[str]) -> dict:
     }
     properties["estrategia"] = {"type": "string", "enum": ["planilha", "historico"],
                                  "description": "Fonte de preços a usar"}
-    properties["tabela_precos"] = {"type": "string", "enum": list(TABELAS_PRECOS),
+    tabelas = list(empresa(emissor).tabelas) if emissor else list(TABELAS_PRECOS)
+    properties["tabela_precos"] = {"type": "string", "enum": tabelas,
                                     "description": "Tabela de preços da empresa. Flying: "
                                                    "'padrao' ou 'mcmv' (Minha Casa Minha "
                                                    "Vida); Rinno: 'rinno'; NID: 'nid'."}
@@ -250,7 +282,7 @@ def _schema_estrutura(categorias: list[str]) -> dict:
         "type": "object",
         "additionalProperties": False,
         "properties": properties,
-        "required": ["emissor", "cliente"],
+        "required": ["cliente"] if emissor else ["emissor", "cliente"],
     }
 
 
@@ -266,14 +298,35 @@ def _empresa_da_categoria(cat: str) -> str:
     return empresa(_emissor_da_categoria(cat)).nome
 
 
-def _ferramentas(categorias: list[str]) -> list[dict]:
-    return [
-        {"type": "function", "function": {
-            "name": "precificar_proposta",
-            "description": "Precifica a estrutura da proposta (preços oficiais/histórico). "
-                           "Devolve valores, totais e pendências obrigatórias.",
-            "parameters": {"type": "object", "properties": {"estrutura": _schema_estrutura(categorias)},
-                           "required": ["estrutura"]}}},
+def nome_da_ferramenta(emissor: str) -> str:
+    return f"precificar_{emissor}"
+
+
+def _emissor_da_ferramenta(nome: str) -> str | None:
+    """'precificar_rinno' -> 'rinno'; qualquer outro nome -> None."""
+    prefixo = "precificar_"
+    if nome.startswith(prefixo) and nome[len(prefixo):] in EMPRESAS:
+        return nome[len(prefixo):]
+    return None
+
+
+def _ferramentas(categorias_por_empresa: dict[str, list[str]]) -> list[dict]:
+    """Uma ferramenta de precificação por empresa, cada uma só com as
+    categorias e tabelas da própria. Escolher a ferramenta é escolher a
+    empresa — `filmes` com emissor rinno deixa de ser possível, em vez de
+    ser remapeado depois."""
+    ferramentas = []
+    for chave, categorias in categorias_por_empresa.items():
+        emp = empresa(chave)
+        ferramentas.append({"type": "function", "function": {
+            "name": nome_da_ferramenta(chave),
+            "description": f"Precifica uma proposta da {emp.nome} (preços oficiais/histórico "
+                           "do cliente). Devolve valores, totais e pendências obrigatórias. "
+                           "Use só para serviços dessa empresa.",
+            "parameters": {"type": "object",
+                           "properties": {"estrutura": _schema_estrutura(categorias, chave)},
+                           "required": ["estrutura"]}}})
+    return ferramentas + [
         {"type": "function", "function": {
             "name": "listar_propostas_cliente",
             "description": "Lista propostas já feitas (id, cliente, projeto, data, total), "
@@ -296,7 +349,11 @@ def _ferramentas(categorias: list[str]) -> list[dict]:
 
 # Mantido para compatibilidade/inspeção — schema/ferramentas reais são
 # montados por request em `responder`, com as categorias do catálogo carregado.
-FERRAMENTAS = _ferramentas([])
+FERRAMENTAS = _ferramentas({chave: [] for chave in EMPRESAS})
+
+
+def modelo_configurado() -> str:
+    return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
 def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
@@ -304,7 +361,7 @@ def _chamar_modelo(mensagens_llm: list[dict], tools: list[dict]):
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     resp = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        model=modelo_configurado(),
         messages=mensagens_llm,
         tools=tools,
         temperature=0.2,
@@ -370,9 +427,25 @@ def _completar_estrutura(bruto: dict, categorias: list[str] | None = None) -> di
 def _executar_ferramenta(conn: psycopg.Connection, nome: str, args: dict,
                           categorias: list[str] | None = None) -> tuple[str, dict | None]:
     """Devolve (resultado_json_para_a_ia, levantamento_ou_None)."""
-    if nome == "precificar_proposta":
-        estrutura = _completar_estrutura(args.get("estrutura"), categorias)
-        lev = levantar(conn, estrutura)
+    emissor_da_ferramenta = _emissor_da_ferramenta(nome)
+    if nome == "precificar_proposta" or emissor_da_ferramenta:
+        bruto = dict(args.get("estrutura") or {})
+        if emissor_da_ferramenta:
+            # A ferramenta manda: precificar_rinno é da Rinno, diga o que
+            # disser um campo `emissor` perdido nos argumentos.
+            bruto["emissor"] = emissor_da_ferramenta
+        estrutura = _completar_estrutura(bruto, categorias)
+        try:
+            lev = levantar(conn, estrutura)
+        except ValueError as exc:
+            # Erro de entrada (ajuste absurdo, preço negativo): volta para a IA
+            # com a instrução de repassar o texto tal qual — sem isso ela
+            # "explica" com um palpite errado.
+            return json.dumps({
+                "erro": str(exc),
+                "instrucao": "Repasse esta mensagem ao usuário exatamente como está, "
+                             "sem inventar outra causa e sem pedir para ele reformular.",
+            }, ensure_ascii=False), None
         estrutura = lev["estrutura"]  # já no namespace do emissor (filmes -> rinno_filmes)
         from app.api.main import _pendencias  # mesma regra de pendências da API
         lev_out = {
@@ -497,9 +570,44 @@ def _resposta(mensagem: str, *, quick_replies: list[str] | None = None,
             "transcricao": transcricao}
 
 
-def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]:
+def responder(conn: psycopg.Connection, mensagens: list[dict],
+              traco: list[dict] | None = None) -> dict[str, Any]:
+    """Uma rodada do chat. `traco`, se passado, recebe cada chamada de
+    ferramenta ({nome, args, resultado}) — é o que a avaliação lê.
+
+    Toda rodada com mensagem fica registrada em chat_log (nunca derruba o
+    chat): é a matéria-prima para medir e melhorar a inteligência.
+    """
     if not mensagens:
         return _resposta(SAUDACAO, quick_replies=QUICK_REPLIES)
+    traco = [] if traco is None else traco
+    inicio = time.monotonic()
+    resposta: dict[str, Any] | None = None
+    erro: str | None = None
+    try:
+        resposta = _responder(conn, mensagens, traco)
+        return resposta
+    except Exception as exc:  # noqa: BLE001 — registra e propaga
+        erro = repr(exc)
+        raise
+    finally:
+        registrar_rodada(
+            conn, modelo=modelo_configurado(), mensagens=mensagens, ferramentas=traco,
+            resposta=resposta or {}, emissor=_emissor_do_traco(traco),
+            duracao_ms=int((time.monotonic() - inicio) * 1000), erro=erro,
+        )
+
+
+def _emissor_do_traco(traco: list[dict]) -> str | None:
+    for chamada in reversed(traco):
+        emissor = _emissor_da_ferramenta(chamada.get("nome", ""))
+        if emissor:
+            return emissor
+    return None
+
+
+def _responder(conn: psycopg.Connection, mensagens: list[dict],
+               traco: list[dict]) -> dict[str, Any]:
     if not os.getenv("OPENAI_API_KEY"):
         return _resposta(MSG_SEM_IA)
 
@@ -511,7 +619,7 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
     tabela = _tabela_unificada(catalogos)
     categorias = tabela.categorias()
     system_prompt = _montar_system_prompt(catalogos)
-    ferramentas = _ferramentas(categorias)
+    ferramentas = _ferramentas({chave: t.categorias() for chave, t in catalogos.items()})
 
     # Prints viram texto ANTES da conversa: guarda recusada é erro do usuário
     # (mensagem própria), falha da leitura cai no mesmo MSG_SEM_IA do chat.
@@ -553,6 +661,7 @@ def responder(conn: psycopg.Connection, mensagens: list[dict]) -> dict[str, Any]
                         ensure_ascii=False), None
                 if lev is not None:
                     levantamento = lev
+                traco.append({"nome": tc.function.name, "args": args_tc, "resultado": resultado})
                 _citar_propostas(tc.function.name, args_tc, resultado, citadas)
                 llm.append({"role": "tool", "tool_call_id": tc.id, "content": resultado})
         return _resposta("Precisei de muitas etapas — pode repetir de forma mais direta?",

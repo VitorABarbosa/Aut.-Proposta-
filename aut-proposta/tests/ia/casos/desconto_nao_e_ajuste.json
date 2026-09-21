@@ -1,0 +1,21 @@
+{
+  "origem": "Desconto aparece na proposta; ajuste sobre a planilha, não. Os dois não podem se confundir.",
+  "turnos": [
+    "GALLI, ref Aurora, A/C Daniel, duas fachadas, com 10% de desconto de parceria"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "desconto_pct": 10,
+    "ajuste_planilha_pct": 0,
+    "categorias": {
+      "externas": [
+        {
+          "contem": "fachada"
+        },
+        {
+          "contem": "fachada"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "origem": "Rinno_Turtitta_Projeto_AnexoI_R00.pdf: institucional de até 2:00 por 15.000 (a tabela diz 3:30 / 18.000).",
+  "turnos": [
+    "institucional de 2 minutos pra Turtita Di, projeto Turtita, A/C Madeleine Gonçalves, fechamos em 15 mil"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_rinno",
+    "cliente": {
+      "empresa": "turtita",
+      "contato": "madeleine"
+    },
+    "categorias": {
+      "rinno_filmes": [
+        {
+          "contem": "institucional",
+          "descricao_contem": "2:00|2 min|dois minutos",
+          "preco": 15000
+        }
+      ]
+    }
+  }
+}

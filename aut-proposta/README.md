@@ -103,6 +103,30 @@ categoria sem prefixo para o namespace do emissor (`filmes` → `rinno_filmes`,
 `fachada` → `nid_fachada`) antes de precificar — só para dentro da própria
 empresa, nunca de uma para outra — e devolve a estrutura já corrigida.
 
+### Medindo a inteligência
+
+O chat roda no modelo definido em `OPENAI_MODEL` (default `gpt-4o-mini`) com
+**uma ferramenta de precificação por empresa** — `precificar_flying`,
+`precificar_rinno`, `precificar_nid` —, cada uma só com as categorias e tabelas
+da própria. Escolher a ferramenta é escolher a empresa; categoria de outra
+empresa deixa de ser possível. O prompt traz exemplos tirados de propostas
+reais, e todo erro de ferramenta é repassado ao usuário como está.
+
+Toda rodada fica em `chat_log` (mensagens, chamadas de ferramenta, resposta,
+modelo, duração). Conversa que deu errado vira um **caso-ouro** em
+`tests/ia/casos/*.json`: os turnos do usuário e o que a última chamada de
+precificação precisa conter. O avaliador roda todos contra o modelo de verdade:
+
+```bash
+DATABASE_URL=... OPENAI_API_KEY=... python -m scripts.avaliar_chat
+OPENAI_MODEL=<outro modelo> python -m scripts.avaliar_chat   # comparar modelos
+python -m scripts.avaliar_chat archtech_viral_4k             # um caso só
+```
+
+Sem isso, mudança de prompt ou de modelo é palpite; com isso, é número.
+Regra: caso novo entra junto com a correção, e nenhuma mudança no chat sobe
+com a nota caindo.
+
 ### Como o item aparece escrito
 
 Categoria com prefixo de escrita é imagem: cada cena é diferente, então o texto

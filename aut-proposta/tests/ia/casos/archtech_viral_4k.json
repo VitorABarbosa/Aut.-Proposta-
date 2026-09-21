@@ -1,0 +1,25 @@
+{
+  "origem": "Conversa real (set/2026): a IA acertou a Rinno mas pôs o filme em `filmes` e saiu R$ 0,00.",
+  "turnos": [
+    "quero fazer um filme viral para a archtech, enviarei a proposta para o Luis referente ao projeto GOIANIA, cobre 4k pelo filme"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_rinno",
+    "cliente": {
+      "empresa": "archtech",
+      "ref": "goiania",
+      "contato": "luis"
+    },
+    "categorias": {
+      "rinno_filmes": [
+        {
+          "contem": "viral",
+          "preco": 4000
+        }
+      ]
+    },
+    "sem_categorias": [
+      "filmes"
+    ]
+  }
+}

@@ -12,7 +12,7 @@ DSN_TESTE = os.environ.get(
     "DATABASE_URL_TEST", "postgresql://postgres:postgres@localhost:5432/aut_proposta_test"
 )
 
-TABELAS = ("proposta_itens", "propostas", "clientes", "preco_item", "preco_categoria")
+TABELAS = ("proposta_itens", "propostas", "clientes", "preco_item", "preco_categoria", "chat_log")
 
 
 @pytest.fixture

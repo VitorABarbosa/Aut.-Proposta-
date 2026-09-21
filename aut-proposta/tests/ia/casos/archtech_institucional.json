@@ -1,0 +1,26 @@
+{
+  "origem": "Conversa real (set/2026): a IA perguntou 'quantas unidades' de um filme institucional.",
+  "turnos": [
+    "quero fazer um filme institucional para a archtech referente ao projeto consolação, enviarei a proposta para o francisco"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_rinno",
+    "cliente": {
+      "empresa": "archtech",
+      "ref": "consola",
+      "contato": "francisco"
+    },
+    "categorias": {
+      "rinno_filmes": [
+        {
+          "contem": "institucional"
+        }
+      ]
+    },
+    "quantidade_total": 1,
+    "nao_perguntar": [
+      "quantas unidades",
+      "quantos filmes"
+    ]
+  }
+}
