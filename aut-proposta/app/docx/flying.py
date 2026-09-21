@@ -28,7 +28,51 @@ from app.docx.base import (
     itens_orcados,
 )
 from app.docx.formatos import brl
+from app.dominio.orcamento import e_categoria_por_ambiente
+from app.dominio.texto import normalizar
 from app.empresas import Empresa
+
+# Escopo padrão de cada serviço, como sai nas propostas enviadas: o item é uma
+# linha e, abaixo dele, o que está incluído, numerado. Vale para os serviços
+# que têm escopo fechado (tecnologia, tour, maquete); imagem não tem — cada
+# cena é uma cena.
+#
+# Casado pelo começo da descrição do catálogo, como na Rinno. Serviço sem
+# escopo cadastrado aqui sai só com a linha do item — nunca com o escopo de
+# outro. Faltam os textos oficiais de vários serviços; quando chegarem, entram
+# aqui e aparecem na proposta sem mexer em mais nada.
+ESCOPO_POR_ITEM: dict[str, list[str]] = {
+    "desenvolvimento de aplicacao web": [
+        "Catálogo Digital Interativo, permitindo ao usuário uma experiência ao interagir "
+        "na tela touch screen",
+        "Apresentação do Empreendimento",
+        "Informações Institucional",
+        "Implantação",
+        "Perspectivas / Imagens",
+        "Localização Empreendimento – 360º PINS",
+        "Vídeos Conceito + Produto + Redes Sociais",
+        "Revista Digital",
+    ],
+    "tour virtual": [
+        "Elaboração 3d (Arquitetura / Decoração)",
+        "Render 360° VR",
+        "Versão Mobile Offline – Panos 360º",
+    ],
+    "maquete eletronica": [
+        "Simulação de Insolação",
+        "360° View",
+        "Marcadores de tipologia",
+    ],
+}
+
+
+def _escopo_de(descricao: str) -> list[str]:
+    """Casa pelo começo da descrição, sem ligar para acento ou maiúscula."""
+    alvo = normalizar(descricao)
+    for prefixo, linhas in ESCOPO_POR_ITEM.items():
+        if alvo.startswith(prefixo):
+            return linhas
+    return []
 
 # Categorias fixas de antes do catálogo dinâmico — fallback de leitura para
 # orçamento salvo sem `_categorias`.
@@ -180,6 +224,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
              data: dt.date, mostra_precos_individuais: bool = False) -> None:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
+    ambientes = int(orc.get("ambientes") or 1)
 
     cabecalho_proposta(doc, empresa, cliente)
 
@@ -199,15 +244,23 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
                       if orc.get(cat) and orc[cat]["qtd"]]
 
     sub = 0
-    for _cat, rotulo, bloco in categorias:
+    for cat, rotulo, bloco in categorias:
         sub += 1
-        _subtitulo(doc, f"2.{sub} {rotulo}")
+        # Serviço cobrado por ambiente traz a quantidade no título, como nas
+        # propostas enviadas: "Vista Virtual Web – Áreas de Lazer (7 ambientes)".
+        titulo = rotulo
+        if e_categoria_por_ambiente(cat) and ambientes > 1:
+            titulo = f"{rotulo} ({ambientes} ambientes)"
+        _subtitulo(doc, f"2.{sub} {titulo}")
         for idx, item in enumerate(bloco["itens"], start=1):
             p = _par(doc, depois=2, recuo=1.25)
             texto = f"{idx}. {item['descricao']}"
             if mostra_precos_individuais:
                 texto += f" — {brl(item['preco'])}"
             _run(p, texto)
+            for linha in _escopo_de(item["descricao"]):
+                sub_p = _par(doc, depois=0, recuo=2.0)
+                _run(sub_p, f"– {linha}")
         p = _par(doc, antes=6, depois=8)
         _run(p, f"Valor total: {brl(bloco['total'])}", estilo="b")
 

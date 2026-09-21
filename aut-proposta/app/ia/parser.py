@@ -77,6 +77,10 @@ _RE_AJUSTE_NEG = re.compile(r"planilha\s*(?:-|menos)\s*(\d{1,3}(?:[.,]\d{1,2})?)
 # "2.400 por imagem", "R$ 2200 a imagem", "média de 2.200 por imagem"
 _RE_PRECO_IMAGEM = re.compile(
     r"(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+|\d{3,6})(?:,\d{2})?\s*(?:reais\s*)?(?:por|a|cada|/)\s*imagem", re.I)
+# "7 ambientes", "7 áreas de lazer", "sete áreas": a quantidade que multiplica
+# o tour virtual. Só o número em algarismo — por extenso é pergunta, não palpite.
+_RE_AMBIENTES = re.compile(
+    r"(\d{1,2})\s*(?:ambientes?|[aá]reas?(?:\s+de\s+lazer)?)\b", re.I)
 _RE_PRECOS_IND = re.compile(r"pre[cç]os?\s*(?:individuais?|por\s*item|por\s*imagem)|coluna\s*de\s*(?:pre[cç]o|valor)", re.I)
 
 _CAPS_IGNORAR = {"EXTERNAS", "INTERNAS", "PLANTAS", "REF", "PROJETO", "CLIENTE",
@@ -204,6 +208,11 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
     if m:
         preco_por_imagem = int(m.group(1).replace(".", ""))
 
+    ambientes = None
+    m = _RE_AMBIENTES.search(texto)
+    if m:
+        ambientes = int(m.group(1))
+
     estrategia = "auto"
     if _RE_ESTRATEGIA_PLAN.search(texto):
         estrategia = "planilha"
@@ -228,6 +237,7 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
         "desconto_label": None,
         "ajuste_planilha_pct": ajuste_pct,
         "preco_por_imagem": preco_por_imagem,
+        "ambientes": ambientes,
         "estrategia": estrategia,
         "mostrar_precos_individuais": bool(_RE_PRECOS_IND.search(texto)),
         "_origem": "local",

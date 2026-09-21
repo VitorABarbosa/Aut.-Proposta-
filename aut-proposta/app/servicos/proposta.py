@@ -18,6 +18,7 @@ from app.dominio.orcamento import (
     CategoriaOrcada,
     ItemOrcado,
     Orcamento,
+    e_categoria_por_ambiente,
     entrada_de_item,
     fechar_orcamento,
     orcar_pela_planilha,
@@ -133,6 +134,9 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
 
     ajuste_pct = float(estrutura.get("ajuste_planilha_pct") or 0)
     preco_por_imagem = _inteiro_ou_none(estrutura.get("preco_por_imagem"))
+    ambientes = _inteiro_ou_none(estrutura.get("ambientes"))
+    if ambientes is not None and ambientes < 1:
+        raise ValueError(f"ambientes inválido: {ambientes} (deve ser >= 1)")
     if preco_por_imagem is not None and preco_por_imagem < 0:
         raise ValueError(f"preco_por_imagem inválido: {preco_por_imagem} (deve ser >= 0)")
     if not -100 < ajuste_pct < 1000:
@@ -151,6 +155,17 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             f"Categoria '{cat}' não está na tabela {tabela_precos} — "
             f"{len(itens)} item(ns) sem preço de tabela; informe o valor."
         )
+    # Tour virtual é cobrado por ambiente: 7 áreas de lazer custam 7x cada
+    # etapa. Sem a quantidade, a conta sai por 1 e o valor fica errado — por
+    # isso o aviso, e a pendência em `_pendencias` quando ninguém perguntou.
+    for cat in tabela.categorias():
+        if e_categoria_por_ambiente(cat) and descricoes.get(cat):
+            avisos.append(
+                f"{tabela.meta(cat)['rotulo']} é cobrado por ambiente — a conta está "
+                f"com {ambientes or 1} ambiente(s). Confirme quantas áreas o "
+                "empreendimento tem."
+            )
+
     cliente = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
 
@@ -163,7 +178,9 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             avisos.append(f"Cliente '{cliente}' não tem histórico — usei a tabela de planilha.")
     if orc is None:
         orc = orcar_pela_planilha(descricoes, tabela, ajuste_pct=ajuste_pct,
-                                  preco_por_imagem=preco_por_imagem)
+                                  preco_por_imagem=preco_por_imagem,
+                                  ambientes=ambientes or 1)
+    orc.ambientes = max(1, ambientes or 1)
     _acrescentar_fora_da_tabela(orc, fora_da_tabela)
 
     desconto = None

@@ -220,3 +220,49 @@ def test_investimento_sai_por_extenso_nas_tres(tmp_path):
         assert "(" in texto.split("INVESTIMENTO PARA O DESENVOLVIMENTOS")[1].split("\n")[1]
     texto = _texto(gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "f.docx", data=DATA, emissor="flying"))
     assert "R$ 3.000,00 (Três Mil Reais)" in texto
+
+
+# ---------- escopo padrão dos serviços da Flying ----------
+
+
+def _texto(caminho):
+    return "\n".join(p.text for p in Document(str(caminho)).paragraphs)
+
+
+def test_servico_com_escopo_sai_com_o_que_esta_incluido(tmp_path):
+    """Nas propostas enviadas, a aplicação web vem com as 8 linhas do que
+    ela inclui. Antes o .docx trazia só o nome do serviço."""
+    fechado = _fechado([("tecnologia", "Tecnologias Interativas", [
+        ("Desenvolvimento de Aplicação Web — para Tela Touch", 22800)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "p.docx", DATA, emissor="flying"))
+    assert "Catálogo Digital Interativo" in texto
+    assert "Localização Empreendimento – 360º PINS" in texto
+    assert "Revista Digital" in texto
+
+
+def test_tour_traz_as_tres_etapas_e_a_quantidade_de_areas_no_titulo(tmp_path):
+    fechado = _fechado([("tour_virtual", "Tour Virtual / VR 360", [
+        ("Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", 17500)])])
+    fechado["orcamento"]["ambientes"] = 7
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "p.docx", DATA, emissor="flying"))
+    assert "(7 ambientes)" in texto
+    assert "Elaboração 3d (Arquitetura / Decoração)" in texto
+    assert "Render 360° VR" in texto
+    assert "Versão Mobile Offline – Panos 360º" in texto
+
+
+def test_um_ambiente_nao_poe_contagem_no_titulo(tmp_path):
+    fechado = _fechado([("tour_virtual", "Tour Virtual / VR 360", [
+        ("Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", 2500)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "p.docx", DATA, emissor="flying"))
+    assert "ambientes)" not in texto
+
+
+def test_imagem_nao_ganha_escopo_de_servico(tmp_path):
+    """Cada cena é uma cena: perspectiva não tem escopo fechado, e não pode
+    herdar o de outro item."""
+    fechado = _fechado([("externas", "Ilustrações Externas", [
+        ("Perspectiva Fachada vista da calçada", 3000)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "p.docx", DATA, emissor="flying"))
+    assert "Catálogo Digital Interativo" not in texto
+    assert "Render 360° VR" not in texto

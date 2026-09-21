@@ -114,6 +114,14 @@ def verificar(esperado: dict, nome: str | None, estrutura: dict | None,
     for frase in esperado.get("nao_perguntar") or []:
         if any(_bate(frase, r) for r in respostas):
             falhas.append(f"a IA perguntou {frase!r}, e não devia")
+
+    # O contrário: quantidade que MUDA o preço tem de ser perguntada, nunca
+    # presumida — o tour virtual é cobrado por área de lazer.
+    for frase in esperado.get("perguntar") or []:
+        if not any(_bate(frase, r) for r in respostas):
+            falhas.append(f"a IA NÃO perguntou {frase!r}, e devia — "
+                          f"respondeu: {respostas[-1][:120]!r}" if respostas else
+                          f"a IA NÃO perguntou {frase!r}, e devia")
     return falhas
 
 

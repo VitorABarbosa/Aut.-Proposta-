@@ -6,7 +6,7 @@ from scripts.avaliar_chat import (CASOS_DIR, _linhas_de_itens, carregar_casos,
 
 CHAVES_ESPERADO = {"ferramenta", "cliente", "categorias", "sem_categorias", "preco_por_imagem",
                    "ajuste_planilha_pct", "desconto_pct", "quantidade_total", "quantidade_minima",
-                   "nao_perguntar", "descricao_contem"}
+                   "nao_perguntar", "perguntar", "descricao_contem"}
 # Caso de leitura de print (tem `literal`): mede a etapa 2, não a conversa.
 CHAVES_LEITURA = {"itens_total", "itens_minimo", "contem", "ac", "ac_nao", "construtora",
                   "construtora_nao", "empreendimento", "empreendimento_nao", "por_categoria"}
@@ -112,3 +112,17 @@ def test_leitura_confere_quantidade_por_categoria():
     assert verificar_leitura({"por_categoria": {"externas": 1, "internas": 1}}, BLOCO) == []
     falhas = verificar_leitura({"por_categoria": {"internas": 12}}, BLOCO)
     assert falhas and "esperava 12 itens, veio 1" in falhas[0]
+
+
+def test_avaliador_cobra_a_pergunta_que_muda_o_preco():
+    """Tour virtual é por ambiente: não perguntar quantas áreas é reprovação."""
+    esperado = {"perguntar": ["quantas areas|quantos ambientes"]}
+    calado = verificar(esperado, "precificar_flying",
+                       {"cliente": {"empresa": "Maskin"}, "tour_virtual": ["Render 360"]},
+                       ["Pronto, o tour ficou R$ 4.150."])
+    assert calado and "NÃO perguntou" in calado[0]
+
+    perguntou = verificar(esperado, "precificar_flying",
+                          {"cliente": {"empresa": "Maskin"}, "tour_virtual": ["Render 360"]},
+                          ["Quantas áreas de lazer o empreendimento tem?"])
+    assert perguntou == []

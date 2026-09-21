@@ -80,7 +80,8 @@ NÃO PERGUNTE ISSO (assuma e siga):
 - A/C é PESSOA, um nome de gente ("Luis", "Madeleine"). Nome de empresa NÃO é
   A/C. Se não veio pessoa nenhuma, mande contato: "" e precifique — a pendência
   do preview cobra isso sozinha. Nunca ofereça uma empresa como A/C.
-- Quantidade de item que é único por natureza (filme, tour, projeto, app): é 1.
+- Quantidade de item que é único por natureza (filme, projeto, app): é 1. O
+  tour virtual é a exceção — ali a quantidade de ambientes se pergunta sempre.
 - Confirmação do que o usuário acabou de escrever. Ele escreveu, está valendo.
 
 O mesmo cliente costuma receber proposta de mais de uma empresa, mas CADA
@@ -100,9 +101,18 @@ você):
 - `preco_por_imagem`: "2.400 por imagem", "média de 2.200 a imagem", "mesmo
   valor por imagem do projeto anterior" → o número. Vale para todas as
   perspectivas e plantas; não mexe em filme, tour ou tecnologia.
+- `ambientes`: quantidade de áreas do empreendimento. Veja a regra abaixo.
 - Preço de UM item: "institucional de 2 minutos por 15 mil" → o item vai como
   {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Só
   quando o usuário disse o número; sem número, mande só a descrição.
+
+TOUR VIRTUAL É COBRADO POR AMBIENTE — PERGUNTE SEMPRE QUANTAS ÁREAS. O valor é
+proporcional: as três etapas (elaboração 3d, render 360° VR, versão mobile) são
+cobradas para CADA área de lazer, então 7 áreas custam 7x. Antes de precificar
+um tour/vista virtual, pergunte "quantas áreas de lazer o empreendimento tem?"
+e ponha o número em `ambientes`. Esta é a ÚNICA quantidade que você pergunta —
+é exceção à regra de uma unidade por item, porque aqui o número muda o preço e
+só o usuário sabe quantas áreas o projeto tem. Nunca presuma 1.
 
 FILME TEM VARIÁVEIS: duração, locução, 4K, quantidade de takes. A tabela é uma
 referência por tipo (institucional, conceito, produto/corretor, viral,
@@ -194,6 +204,11 @@ EXEMPLOS (pedidos reais → chamada certa; copie o padrão):
    interiores da piscina e da academia" → precificar_nid {{..., nid_fachada:
    ["Design de fachada"], nid_interiores: ["Apto modelo decorado 3 dorm",
    "Piscina (área comum)", "Academia (área comum)"]}}
+8. "vista virtual das áreas de lazer pra Maskin, projeto Aricanduva, A/C Marcelo"
+   → primeiro pergunte "quantas áreas de lazer o empreendimento tem?"; com a
+   resposta ("7"), chame precificar_flying {{..., tour_virtual: ["Elaboração 3d",
+   "Render 360 VR", "Versão mobile offline"], ambientes: 7}} — as três etapas e
+   o número de áreas, que multiplica o preço de cada uma.
 7. "A Masha Coordenação de Projetos, em nome da SAE Engenharia, solicita
    proposta do Plano de Imagens do empreendimento SAE | GUANÁS. Escopo: 1
    fachada frente + lateral direita dia, 1 fachada fundo + lateral esquerda, 1
@@ -314,6 +329,14 @@ def _schema_estrutura(categorias: list[str], emissor: str | None = None) -> dict
         "description": "Preço fixo por imagem, em reais, quando o cliente fecha um valor único "
                        "para todas as perspectivas e plantas (ex.: 'R$ 2.400 a imagem'). "
                        "null se não houver. Só afeta categorias de imagem.",
+    }
+    properties["ambientes"] = {
+        "type": ["integer", "null"],
+        "description": "Quantidade de áreas/ambientes do empreendimento, para os serviços "
+                       "cobrados por ambiente (tour virtual / vista virtual). O valor é "
+                       "PROPORCIONAL a este número: 7 áreas de lazer custam 7x cada etapa. "
+                       "SEMPRE pergunte ao usuário; nunca presuma 1. null se a proposta não "
+                       "tiver tour virtual.",
     }
     properties["estrategia"] = {"type": "string", "enum": ["planilha", "historico"],
                                  "description": "Fonte de preços a usar"}
