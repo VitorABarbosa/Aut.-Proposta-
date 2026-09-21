@@ -1,0 +1,35 @@
+{
+  "origem": "Pedido real colado no chat (e-mail da Masha em nome da SAE). A IA fez 4 perguntas e não precificou: quis saber se a 'empresa que emite' era a Masha, ofereceu a SAE como A/C, perguntou MCMV e perguntou preço por imagem.",
+  "turnos": [
+    "A Masha Coordenação de Projetos, em nome da SAE Engenharia e Marcante, solicita a apresentação de proposta comercial para o desenvolvimento do Plano de Imagens do empreendimento SAE | GUANÁS, localizado na Vila Sônia, em São Paulo. O escopo previsto contempla: 1 Fachada frente + lateral direita dia, 1 Fachada fundo + lateral esquerda, 1 entrada principal ampliada dia, 1 Fachada entardecer, 1 entrada principal ampliada perspectivada noite, 1 Implantação térreo, 1 Implantação 1º Pavimento, 1 Implantação 2º ao 13º Pavimento Tipo, 1 Implantação 14º ao 24º Pavimento Tipo, 1 Implantação 25º ao 28º Pavimento Tipo, 1 Implantação 29º lazer cobertura, 1 Planta humanizada das tipologias A, 1 Planta humanizada das tipologias B, 1 Planta humanizada das tipologias C, 1 Planta humanizada das tipologias D"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "sae",
+      "ref": "guanas"
+    },
+    "quantidade_total": 15,
+    "categorias": {
+      "externas": [
+        {"contem": "fachada frente"},
+        {"contem": "fachada fundo"},
+        {"contem": "entardecer"}
+      ],
+      "plantas": [
+        {"contem": "terreo|térreo"},
+        {"contem": "29|cobertura"},
+        {"contem": "tipologias a|tipologia a"},
+        {"contem": "tipologias d|tipologia d"}
+      ]
+    },
+    "preco_por_imagem": 0,
+    "ajuste_planilha_pct": 0,
+    "nao_perguntar": [
+      "e mcmv|minha casa|faixa",
+      "preco por imagem|valor por imagem",
+      "empresa que emite|quem emite|qual empresa emite",
+      "masha"
+    ]
+  }
+}
