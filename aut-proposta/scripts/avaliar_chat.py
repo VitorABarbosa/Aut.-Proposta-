@@ -98,7 +98,8 @@ def verificar(esperado: dict, nome: str | None, estrutura: dict | None,
         if entradas.get(cat):
             falhas.append(f"categoria {cat} não deveria ter itens (veio {entradas[cat]})")
 
-    for campo in ("preco_por_imagem", "ajuste_planilha_pct", "desconto_pct"):
+    for campo in ("preco_por_imagem", "ajuste_planilha_pct", "desconto_pct",
+                  "total_fechado", "ambientes"):
         if campo in esperado:
             veio = estrutura.get(campo)
             veio_num = float(veio) if veio not in (None, "") else 0.0

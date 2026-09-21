@@ -106,9 +106,14 @@ você):
 - `ajuste_planilha_pct`: "planilha mais 10%", "com 10% em cima", "cliente novo"
   → 10; "planilha menos 5%" → -5. Entra no preço de cada item e NÃO aparece na
   proposta. É diferente de desconto, que aparece como linha.
-- `preco_por_imagem`: "2.400 por imagem", "média de 2.200 a imagem", "mesmo
-  valor por imagem do projeto anterior" → o número. Vale para todas as
-  perspectivas e plantas; não mexe em filme, tour ou tecnologia.
+- `preco_por_imagem`: SÓ quando a frase disser que o valor é POR IMAGEM —
+  "2.400 por imagem", "média de 2.200 a imagem", "mesmo valor por imagem do
+  projeto anterior". Vale para todas as perspectivas e plantas; não mexe em
+  filme, tour ou tecnologia.
+  CUIDADO: "a maquete a gente fez por 20 mil" é o preço DAQUELE item, não o
+  preço por imagem — tem o nome de um serviço colado no valor. Preço por
+  imagem só existe quando a palavra "imagem" está na frase. Trocar um pelo
+  outro multiplica o erro por todas as cenas da proposta.
 - `total_fechado`: valor final da proposta inteira, quando o usuário fecha o
   total ("fechamos por 100 mil", "o total fica em 85 mil"). O desconto passa a
   ser a diferença até esse número. Diferente do preço de UM item.
@@ -171,6 +176,15 @@ não corte a lista no meio, não deixe de fora o que está no fim. Copie a
 descrição como está na leitura, faixa de andar inclusive ("Implantação 2º ao
 13º Pavimento Tipo") — número você nunca reescreve.
 
+SERVIÇO COM NOME PRÓPRIO NUNCA É ILUSTRAÇÃO. Maquete eletrônica, tour virtual,
+vista virtual, aplicação web, explorador, filme, projeto de interiores e stand
+são serviços: vão na categoria do serviço, nunca em ilustrações externas ou
+internas, mesmo que o catálogo carregado não tenha uma linha exata para eles.
+Ilustração externa/interna é CENA do empreendimento ("fachada noturna",
+"piscina", "hall"). Se o serviço não estiver no catálogo, use a categoria de
+tecnologia/serviço mais próxima e avise numa linha que falta cadastrar o preço
+— nunca jogue o serviço no meio das imagens.
+
 REGRA DE RIGIDEZ: se o pedido não casar claramente com um item do catálogo
 acima, NÃO classifique por palpite. Pergunte ao usuário qual item corresponde,
 citando 2-3 candidatos do catálogo. Um serviço que não é imagem NUNCA entra
@@ -184,8 +198,11 @@ use 'padrao' e siga — não pergunte.
 REGRAS INEGOCIÁVEIS:
 - Você NUNCA inventa nem calcula preço/valor. Todo número vem das ferramentas.
 - Se uma ferramenta devolver {{"erro": ...}}, repasse o texto do erro ao usuário
-  como está. Não troque por uma causa que você imaginou ("a categoria não foi
-  reconhecida") nem peça para ele reformular: o erro já diz o que fazer.
+  como está e PARE. Não troque por uma causa que você imaginou ("a categoria
+  não foi reconhecida"), não peça para ele reformular e, acima de tudo, NÃO
+  chame a ferramenta de novo com menos coisas para "contornar" o erro: o erro
+  é para o usuário resolver, e refazer a chamada joga fora tudo que já estava
+  precificado.
 - Para precificar (mesmo parcial), chame a ferramenta DA EMPRESA com a
   estrutura: cliente = {{empresa, ref, contato}}; cada categoria dela (nome
   entre parênteses no catálogo) = lista de itens (uma entrada por unidade,
@@ -713,18 +730,21 @@ def _melhor_levantamento(atual: dict | None, novo: dict) -> dict:
     de uma vez na MESMA resposta.
 
     Em geral vale o último: é assim que "na verdade são 4" corrige o anterior.
-    A exceção é a chamada que chega vazia depois de uma que precificou — foi o
-    que zerou a proposta da Tavares e Rosseti, onde a IA precificou o tour de 7
-    áreas (R$ 29.050) e chamou a ferramenta de novo só com o cliente, para
-    comentar que faltavam as imagens: o preview ficou com o cliente preenchido,
-    nenhum item e R$ 0,00.
+    A exceção é a chamada que chega MAIS POBRE logo depois de uma que
+    precificou, o que sempre foi a IA se atrapalhando, nunca ordem do usuário.
+    Aconteceu duas vezes com a Tavares e Rosseti: uma chamada só com o cliente
+    para comentar que faltavam imagens (preview zerado), e uma chamada com 1
+    item depois de uma com 38, quando a ferramenta devolveu erro e a IA "tentou
+    de novo" jogando fora as 30 imagens e o tour.
 
-    Esvaziar de propósito ("tira tudo") continua valendo, porque aí a rodada
-    tem só essa chamada e não há nada melhor para preservar.
+    Encolher é o sinal: corrigir de verdade ("na verdade são 4", "tira as
+    plantas") mantém a ordem de grandeza da lista, e esvaziar de propósito
+    ("tira tudo") vem numa rodada com uma chamada só, onde não há nada melhor
+    a preservar.
     """
     if atual is None:
         return novo
-    if _itens_de(novo) == 0 and _itens_de(atual) > 0:
+    if _itens_de(novo) < _itens_de(atual):
         return atual
     return novo
 

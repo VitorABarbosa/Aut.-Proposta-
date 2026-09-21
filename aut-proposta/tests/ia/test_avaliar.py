@@ -6,7 +6,7 @@ from scripts.avaliar_chat import (CASOS_DIR, _linhas_de_itens, carregar_casos,
 
 CHAVES_ESPERADO = {"ferramenta", "cliente", "categorias", "sem_categorias", "preco_por_imagem",
                    "ajuste_planilha_pct", "desconto_pct", "quantidade_total", "quantidade_minima",
-                   "nao_perguntar", "perguntar", "descricao_contem"}
+                   "nao_perguntar", "perguntar", "descricao_contem", "total_fechado"}
 # Caso de leitura de print (tem `literal`): mede a etapa 2, não a conversa.
 CHAVES_LEITURA = {"itens_total", "itens_minimo", "contem", "ac", "ac_nao", "construtora",
                   "construtora_nao", "empreendimento", "empreendimento_nao", "por_categoria"}

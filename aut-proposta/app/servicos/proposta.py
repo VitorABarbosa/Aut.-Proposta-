@@ -193,15 +193,19 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     total_fechado = _inteiro_ou_none(estrutura.get("total_fechado"))
     rotulo = estrutura.get("desconto_label") or ""
     desconto = None
+    acima_da_soma = False
     if total_fechado is not None:
         subtotal = orc.subtotal
         if total_fechado > subtotal:
-            raise ValueError(
-                f"O valor fechado (R$ {total_fechado:,}) é maior que a soma dos itens "
-                f"(R$ {subtotal:,}). Suba o preço de um item ou use o ajuste de planilha — "
-                "o total fechado só desconta.".replace(",", ".")
-            )
-        desconto = Desconto(tipo="valor", valor=float(subtotal - total_fechado), rotulo=rotulo)
+            # Fechar acima da soma é negociação legítima, não erro: o número que
+            # o cliente lê é o negociado. Antes isto levantava ValueError, e a
+            # IA, ao receber o erro, refazia a chamada com a estrutura
+            # mutilada — foi assim que a proposta da Tavares e Rosseti perdeu
+            # as 30 imagens e o tour. Vale o número, com aviso.
+            acima_da_soma = True
+        else:
+            desconto = Desconto(tipo="valor", valor=float(subtotal - total_fechado),
+                                rotulo=rotulo)
     elif estrutura.get("desconto_pct", 0):
         desconto = Desconto(
             tipo="percentual",
@@ -214,12 +218,30 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         # A estrutura já no namespace do emissor: quem devolve ao front tem de
         # usar esta, senão o preview lista `rinno_filmes` sem achar os itens.
         "estrutura": estrutura,
-        "fechado": fechar_orcamento(orc, desconto),
+        "fechado": _fechar(orc, desconto, total_fechado if acima_da_soma else None, avisos),
         "estrategia_usada": orc.estrategia,
         "emissor": emissor,
         "tabela_precos": tabela_precos,
         "avisos": avisos,
     }
+
+
+def _fechar(orc: Orcamento, desconto: "Desconto | None", total_acima: int | None,
+            avisos: list[str]) -> dict[str, Any]:
+    """Fecha o orçamento, respeitando um total negociado acima da soma dos itens.
+
+    Sem desconto a mostrar, a proposta sai com o valor fechado limpo — que é
+    como ela já imprime qualquer total sem desconto.
+    """
+    fechado = fechar_orcamento(orc, desconto)
+    if total_acima is not None:
+        avisos.append(
+            f"O valor fechado (R$ {total_acima:,}) está acima da soma dos itens "
+            f"(R$ {orc.subtotal:,}) — vale o valor fechado.".replace(",", ".")
+        )
+        fechado["financeiro"] = {**fechado["financeiro"], "total": float(total_acima),
+                                 "desconto_pct": 0.0, "desconto_valor": 0.0}
+    return fechado
 
 
 def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) -> dict[str, Any]:

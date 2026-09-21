@@ -1,0 +1,39 @@
+{
+  "origem": "Teste real, tudo numa mensagem só. A IA pôs a maquete em ilustrações externas, leu 'a maquete por 20 mil' como preço POR IMAGEM, e ao receber o erro do valor fechado refez a chamada jogando fora as 30 imagens e o tour.",
+  "turnos": [
+    "proposta da Flying pra TAVARES E ROSSETI, projeto Fernando de Noronha, A/C Luis: 30 imagens a definir, maquete eletronica e tour virtual das areas comuns 7 áreas a maquete a gente fez por 20 mil e fechamos a proposta em 100 mil"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "tavares",
+      "ref": "noronha",
+      "contato": "luis"
+    },
+    "preco_por_imagem": 0,
+    "quantidade_minima": 33,
+    "categorias": {
+      "externas": [
+        {
+          "contem": "a definir"
+        }
+      ],
+      "tecnologia": [
+        {
+          "contem": "maquete",
+          "preco": 20000
+        }
+      ],
+      "tour_virtual": [
+        {
+          "contem": "elabora|render|360|mobile"
+        }
+      ]
+    },
+    "sem_categorias": [],
+    "nao_perguntar": [
+      "nao consegui identificar|quais imagens|poderia listar|maior que a soma"
+    ],
+    "total_fechado": 100000
+  }
+}
