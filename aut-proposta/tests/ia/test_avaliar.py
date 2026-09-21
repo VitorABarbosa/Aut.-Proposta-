@@ -1,11 +1,26 @@
 """O avaliador dos casos-ouro: confere chamadas sem precisar da IA."""
 import json
 
-from scripts.avaliar_chat import CASOS_DIR, carregar_casos, ultima_precificacao, verificar
+from scripts.avaliar_chat import (CASOS_DIR, _linhas_de_itens, carregar_casos,
+                                  ultima_precificacao, verificar, verificar_leitura)
 
 CHAVES_ESPERADO = {"ferramenta", "cliente", "categorias", "sem_categorias", "preco_por_imagem",
                    "ajuste_planilha_pct", "desconto_pct", "quantidade_total", "quantidade_minima",
                    "nao_perguntar", "descricao_contem"}
+# Caso de leitura de print (tem `literal`): mede a etapa 2, não a conversa.
+CHAVES_LEITURA = {"itens_total", "itens_minimo", "contem", "ac", "ac_nao", "construtora",
+                  "construtora_nao", "empreendimento", "empreendimento_nao", "por_categoria"}
+
+BLOCO = """CONSTRUTORA: SAE Engenharia e Marcante
+EMPREENDIMENTO: SAE | GUANÁS
+A/C: Thais Bastos
+ITENS:
+- externas | Fachada frente + lateral direita dia | 1
+- plantas | Implantação 2º ao 13º Pavimento Tipo | 1
+- internas | Coworking | 1
+DÚVIDAS:
+- nenhuma
+OBSERVAÇÕES: nenhuma"""
 
 
 def test_todos_os_casos_sao_bem_formados():
@@ -13,6 +28,9 @@ def test_todos_os_casos_sao_bem_formados():
     assert len(casos) >= 8
     for nome, caso in casos.items():
         assert caso["origem"], nome
+        if caso.get("literal"):
+            assert set(caso["esperado"]) <= CHAVES_LEITURA, (nome, set(caso["esperado"]))
+            continue
         assert caso["turnos"] and all(isinstance(t, str) for t in caso["turnos"]), nome
         assert set(caso["esperado"]) <= CHAVES_ESPERADO, (nome, set(caso["esperado"]) - CHAVES_ESPERADO)
         assert caso["esperado"]["ferramenta"].startswith("precificar_"), nome
@@ -54,3 +72,43 @@ def test_ultima_precificacao_do_traco():
              {"nome": "precificar_rinno", "args": {"estrutura": {"cliente": "B"}}, "resultado": "{}"}]
     assert ultima_precificacao(traco) == ("precificar_rinno", {"cliente": "B"})
     assert ultima_precificacao([]) == (None, None)
+
+
+# ---------- leitura de print (etapa 2) ----------
+
+
+def test_conta_so_as_linhas_de_itens_do_bloco():
+    assert _linhas_de_itens(BLOCO) == [
+        "externas | Fachada frente + lateral direita dia | 1",
+        "plantas | Implantação 2º ao 13º Pavimento Tipo | 1",
+        "internas | Coworking | 1",
+    ]
+    # "nenhum item claro" não conta como item.
+    assert _linhas_de_itens("ITENS:\n- nenhum item claro\nDÚVIDAS:\n- nenhuma") == []
+
+
+def test_leitura_reprova_quando_a_lista_encolhe():
+    """O erro real: 39 itens no e-mail, 11 no preview."""
+    falhas = verificar_leitura({"itens_total": 39}, BLOCO)
+    assert falhas and "esperava 39, veio 3" in falhas[0]
+    assert verificar_leitura({"itens_total": 3, "itens_minimo": 3}, BLOCO) == []
+
+
+def test_leitura_reprova_ac_que_e_gente_nossa():
+    nosso = BLOCO.replace("A/C: Thais Bastos", "A/C: Max Barbosa")
+    falhas = verificar_leitura({"ac": "thais", "ac_nao": "max|lucas"}, nosso)
+    assert len(falhas) == 2                      # não é a Thais, e é o Max
+    assert any("é gente nossa" in f for f in falhas)
+    assert verificar_leitura({"ac": "thais", "ac_nao": "max|lucas"}, BLOCO) == []
+
+
+def test_leitura_cobra_faixa_de_andar_como_esta_no_print():
+    encolhido = BLOCO.replace("2º ao 13º", "2º ao 3º")
+    assert verificar_leitura({"contem": ["2º ao 13º|2o ao 13o"]}, encolhido)
+    assert verificar_leitura({"contem": ["2º ao 13º|2o ao 13o"]}, BLOCO) == []
+
+
+def test_leitura_confere_quantidade_por_categoria():
+    assert verificar_leitura({"por_categoria": {"externas": 1, "internas": 1}}, BLOCO) == []
+    falhas = verificar_leitura({"por_categoria": {"internas": 12}}, BLOCO)
+    assert falhas and "esperava 12 itens, veio 1" in falhas[0]

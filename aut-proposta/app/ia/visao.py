@@ -6,9 +6,15 @@ de leitura. Aqui a imagem passa por três filtros antes de ir para o modelo:
 1. tamanho — payload acima de `MAX_BYTES` é recusado com mensagem amigável;
 2. validação real — o formato vem das assinaturas do arquivo (magic bytes),
    não do mime declarado no data URL, que o cliente pode mentir;
-3. downscale — o maior lado cai para `LADO_MAXIMO` e a imagem é reencodada em
-   JPEG, que é o que corta token de verdade (o custo de visão vem das
-   dimensões, não do peso do arquivo).
+3. downscale — largura e altura caem para `LARGURA_MAXIMA`/`ALTURA_MAXIMA` e
+   a imagem é reencodada em JPEG.
+
+O downscale limita os dois lados SEPARADAMENTE, e não o maior lado, porque
+print de e-mail é alto e estreito: com um teto único de 1400px, uma captura de
+1200x3000 virava 560x1400 e a letra sumia — era assim que "2º ao 13º Pavimento"
+chegava ao modelo como "2º ao 3º". E não se economizava nada com isso: a API de
+visão normaliza o menor lado para 768px de qualquer jeito, então as duas
+versões custam os mesmos tiles. Esmagar antes era perder leitura de graça.
 
 Sem Pillow instalado os dois primeiros filtros continuam valendo e o downscale
 é pulado — a leitura funciona, só sai mais cara.
@@ -24,7 +30,8 @@ from typing import NamedTuple
 
 MAX_BYTES = 5 * 1024 * 1024   # por imagem, já decodificada
 MAX_IMAGENS = 4               # por mensagem
-LADO_MAXIMO = 1400            # px no maior lado após o downscale
+LARGURA_MAXIMA = 1600         # px de largura após o downscale
+ALTURA_MAXIMA = 3600          # px de altura — print alto de e-mail cabe inteiro
 QUALIDADE_JPEG = 85
 
 # Formatos que a API de visão aceita, reconhecidos pela assinatura do arquivo.
@@ -80,9 +87,8 @@ def _redimensionar(dados: bytes) -> tuple[bytes, str]:
         with Image.open(io.BytesIO(dados)) as img:
             img.seek(0)  # GIF animado: só o primeiro quadro
             img = img.convert("RGB")
-            maior = max(img.size)
-            if maior > LADO_MAXIMO:
-                escala = LADO_MAXIMO / maior
+            escala = min(1.0, LARGURA_MAXIMA / img.width, ALTURA_MAXIMA / img.height)
+            if escala < 1.0:
                 novo = (max(1, round(img.width * escala)), max(1, round(img.height * escala)))
                 img = img.resize(novo, Image.LANCZOS)
             buf = io.BytesIO()

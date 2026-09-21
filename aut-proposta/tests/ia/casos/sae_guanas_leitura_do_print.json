@@ -1,0 +1,23 @@
+{
+  "origem": "E-mail real da Masha em nome da SAE (18/09/2026). Com a leitura numa etapa só, o preview ficou com 11 dos 39 itens: sumiram os 24 ambientes internos/externos/cobertura, 'Implantação 2º ao 13º' virou '2º ao 3º' e o A/C foi preenchido com o Max, que é da Flying.",
+  "literal": "DE: Thais Bastos | Masha Coordenação de Projetos\nPARA: Max Barbosa | Flying Studio; Lucas Leal | Flying Studio\nASSUNTO: SAE - GUANAS | Proposta de Plano de Imagens\nCORPO:\nA Masha Coordenação de Projetos, em nome da SAE Engenharia e Marcante, solicita a apresentação de proposta comercial para o desenvolvimento do Plano de Imagens do empreendimento SAE | GUANÁS, localizado na Vila Sônia, em São Paulo.\n## O escopo previsto contempla:\n1 Fachada frente + lateral direita dia\n1 Fachada fundo + lateral esquerda\n1 entrada principal ampliada dia\nFachada entardecer\n1 entrada principal ampliada perspectivada noite\n1 Implantação térreo\n1 Implantação 1º Pavimento\n1 Implantação 2º ao 13º Pavimento Tipo\n1 Implantação 14º ao 24º Pavimento Tipo\n1 Implantação 25º ao 28º Pavimento Tipo\n1 Implantação 29º lazer cobertura\n1 Planta humanizada das tipologias A\n1 Planta humanizada das tipologias B\n1 Planta humanizada das tipologias C\n1 Planta humanizada das tipologias D\n## AMBIENTES INTERNOS - TÉRREO\nCoworking\nEspaço beleza\nDelivery\nMini mercado\nBicicletário\nHall\nLavanderia\nPet care\nSalão de festas\nGame room\nBrinquedoteca\nFitness / academia\n## AMBIENTES EXTERNOS - TÉRREO\nQuadra\nPiscina (vôo de pássaro)\nPiscina perspectivada\nChurrasqueira\nEstar / churrasqueira\nPet place\nFitness externo\n## AMBIENTES - COBERTURA\nFitness externo\nSolário\nPraça da fogueira/luau\nLounge\nGourmet pic nic",
+  "esperado": {
+    "itens_total": 39,
+    "construtora": "sae",
+    "empreendimento": "guanas",
+    "ac": "thais",
+    "ac_nao": "max|lucas",
+    "contem": [
+      "fachada frente",
+      "fachada entardecer",
+      "2º ao 13º|2o ao 13o",
+      "25º ao 28º|25o ao 28o",
+      "tipologias d|tipologia d",
+      "coworking",
+      "brinquedoteca",
+      "pet place",
+      "praca da fogueira|praça da fogueira",
+      "gourmet"
+    ]
+  }
+}

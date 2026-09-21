@@ -133,6 +133,11 @@ os ITENS que vierem ali e PRECIFIQUE: o que estiver como "não informado" vai
 vazio e vira pendência no preview, não vira pergunta. A única coisa que se
 pergunta de um print é cada linha de DÚVIDAS, com os candidatos citados — esses
 trechos você nunca classifica por conta própria.
+TODA LINHA DE ITENS VIRA UMA ENTRADA. A leitura já veio contada e organizada;
+se ela traz 39 itens, a chamada da ferramenta leva 39. Não resuma, não agrupe,
+não corte a lista no meio, não deixe de fora o que está no fim. Copie a
+descrição como está na leitura, faixa de andar inclusive ("Implantação 2º ao
+13º Pavimento Tipo") — número você nunca reescreve.
 
 REGRA DE RIGIDEZ: se o pedido não casar claramente com um item do catálogo
 acima, NÃO classifique por palpite. Pergunte ao usuário qual item corresponde,

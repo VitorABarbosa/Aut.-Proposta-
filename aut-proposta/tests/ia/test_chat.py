@@ -283,14 +283,17 @@ TRANSCRICAO = ("CONSTRUTORA: GALLI\nEMPREENDIMENTO: Aurora\nA/C: Daniel\n"
 
 @pytest.fixture
 def leitura_mockada(monkeypatch):
-    """Modelo de visão mockado + cache limpo; devolve a lista de chamadas."""
+    """As DUAS etapas da leitura mockadas + cache limpo; devolve as chamadas de
+    visão (etapa 1), que é o que custa caro e não pode repetir."""
     from collections import OrderedDict
 
     from app.ia import leitura_print
     monkeypatch.setattr(leitura_print, "_cache", OrderedDict())
     chamadas: list = []
     monkeypatch.setattr(leitura_print, "_chamar_modelo",
-                        lambda prompt, imgs: chamadas.append(imgs) or TRANSCRICAO)
+                        lambda prompt, imgs: chamadas.append(imgs) or "CORPO:\n3 fachadas noturnas")
+    monkeypatch.setattr(leitura_print, "_chamar_modelo_texto",
+                        lambda prompt, txt: TRANSCRICAO)
     return chamadas
 
 
