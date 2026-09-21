@@ -1,0 +1,28 @@
+{
+  "origem": "Rinno_Ousy_Vila_Mariana_AnexoI_R01.pdf: conceito 2:30, corretor 1:30 e viral 1:00.",
+  "turnos": [
+    "proposta da Rinno pra OUSY, projeto Vila Mariana, A/C Yuri: um filme conceito, um corretor e um viral"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_rinno",
+    "cliente": {
+      "empresa": "ousy",
+      "ref": "vila mariana",
+      "contato": "yuri"
+    },
+    "categorias": {
+      "rinno_filmes": [
+        {
+          "contem": "conceito"
+        },
+        {
+          "contem": "corretor|produto"
+        },
+        {
+          "contem": "viral"
+        }
+      ]
+    },
+    "quantidade_total": 3
+  }
+}

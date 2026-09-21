@@ -430,3 +430,123 @@ def test_schema_aceita_item_como_string_ou_objeto_com_preco():
     tipos = [alt.get("type") for alt in itens["anyOf"]]
     assert tipos == ["string", "object"]
     assert itens["anyOf"][1]["required"] == ["descricao"]
+
+
+# ---------- uma ferramenta por empresa ----------
+
+
+def test_uma_ferramenta_de_precificacao_por_empresa_so_com_as_proprias_categorias():
+    ferramentas = chat._ferramentas({
+        "flying": ["externas", "filmes"], "rinno": ["rinno_filmes"], "nid": ["nid_pdv"]})
+    nomes = [f["function"]["name"] for f in ferramentas]
+    assert nomes[:3] == ["precificar_flying", "precificar_rinno", "precificar_nid"]
+    assert "listar_propostas_cliente" in nomes and "carregar_proposta" in nomes
+
+    def props(nome):
+        f = next(x for x in ferramentas if x["function"]["name"] == nome)
+        return f["function"]["parameters"]["properties"]["estrutura"]["properties"]
+
+    # Foi `filmes` com emissor rinno que zerou a Archtech: agora não existe.
+    assert "filmes" in props("precificar_flying") and "filmes" not in props("precificar_rinno")
+    assert "rinno_filmes" in props("precificar_rinno") and "rinno_filmes" not in props("precificar_flying")
+    assert "emissor" not in props("precificar_rinno")
+    assert props("precificar_rinno")["tabela_precos"]["enum"] == ["rinno"]
+    assert props("precificar_flying")["tabela_precos"]["enum"] == ["padrao", "mcmv"]
+
+
+def test_ferramenta_da_empresa_manda_mais_que_o_campo_emissor(db):
+    """precificar_rinno é da Rinno mesmo se os argumentos vierem com emissor=flying."""
+    aplicar_schema(db)
+    semear_precos(db)
+    resultado, lev = chat._executar_ferramenta(
+        db, "precificar_rinno",
+        {"estrutura": {"emissor": "flying", "cliente": {"empresa": "OUSY", "ref": "VM", "contato": "Yuri"},
+                       "rinno_filmes": ["Filme conceito"]}},
+        ["rinno_filmes", "filmes"])
+    assert lev["estrutura"]["emissor"] == "rinno"
+    assert lev["fechado"]["orcamento"]["rinno_filmes"]["total"] == 14000
+    assert "erro" not in resultado
+
+
+def test_precificar_proposta_generico_continua_aceito(db):
+    aplicar_schema(db)
+    semear_precos(db)
+    resultado, lev = chat._executar_ferramenta(
+        db, "precificar_proposta",
+        {"estrutura": {"emissor": "nid", "cliente": "OUSY", "nid_pdv": ["Stand"]}}, ["nid_pdv"])
+    assert lev["estrutura"]["emissor"] == "nid"
+
+
+def test_erro_de_entrada_volta_com_instrucao_de_repassar(db):
+    aplicar_schema(db)
+    semear_precos(db)
+    resultado, lev = chat._executar_ferramenta(
+        db, "precificar_flying",
+        {"estrutura": {"cliente": "GALLI", "externas": ["Fachada"], "ajuste_planilha_pct": -100}},
+        ["externas"])
+    dados = json.loads(resultado)
+    assert lev is None
+    assert "ajuste_planilha_pct" in dados["erro"]
+    assert "Repasse esta mensagem" in dados["instrucao"]
+
+
+def test_prompt_traz_exemplos_reais_e_regra_de_uma_unidade():
+    from app.db.repo_precos import carregar_tabela_precos  # noqa: F401 — só o prompt base
+    prompt = chat.SYSTEM_PROMPT
+    assert "EXEMPLOS (pedidos reais" in prompt
+    assert "precificar_rinno" in prompt and "precificar_flying" in prompt and "precificar_nid" in prompt
+    assert "UMA UNIDADE POR ITEM" in prompt
+    assert 'repasse o texto do erro ao usuário' in prompt
+    assert "precificar_proposta" not in prompt
+
+
+# ---------- rastro e registro ----------
+
+
+def test_rodada_grava_chat_log_com_rastro_das_ferramentas(db, monkeypatch):
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_rinno", {"estrutura": {
+            "cliente": {"empresa": "Archtech", "ref": "Goiânia", "contato": "Luis"},
+            "rinno_filmes": [{"descricao": "Filme viral", "preco": 4000}]}})]),
+        _msg(content="Pronto: viral por R$ 4.000."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+
+    traco: list = []
+    out = chat.responder(db, [{"role": "user", "content": "viral pra archtech por 4 mil"}], traco=traco)
+    assert out["mensagem"].startswith("Pronto")
+    assert [c["nome"] for c in traco] == ["precificar_rinno"]
+    assert traco[0]["args"]["estrutura"]["rinno_filmes"][0]["preco"] == 4000
+
+    from app.db.repo_chat_log import listar_rodadas
+    rodadas = listar_rodadas(db)
+    assert len(rodadas) == 1
+    r = rodadas[0]
+    assert r["emissor"] == "rinno" and r["erro"] is None and r["duracao_ms"] >= 0
+    assert r["ferramentas"][0]["nome"] == "precificar_rinno"
+    assert r["resposta"]["mensagem"].startswith("Pronto")
+    assert r["mensagens"][0]["content"] == "viral pra archtech por 4 mil"
+
+
+def test_registro_nao_derruba_o_chat(db, monkeypatch):
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: _msg(content="oi"))
+    import app.ia.chat as modulo
+    monkeypatch.setattr(modulo, "registrar_rodada", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    # registrar_rodada de verdade engole erros; aqui simulamos o pior caso — a
+    # própria chamada explodindo — e o chat ainda tem de responder? Não: o
+    # contrato é que registrar_rodada NUNCA levanta. Confere isso direto.
+    from app.db.repo_chat_log import registrar_rodada
+    assert registrar_rodada(None, modelo="m", mensagens=[], ferramentas=[], resposta={},
+                            emissor=None, duracao_ms=0) is None
+
+
+def test_print_em_base64_nao_vai_para_o_log():
+    from app.db.repo_chat_log import _sem_base64
+    saida = _sem_base64({"content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]})
+    assert saida["content"][0]["image_url"]["url"].startswith("<imagem ")

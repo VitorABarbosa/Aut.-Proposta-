@@ -1,0 +1,31 @@
+{
+  "origem": "NID_Ousy_Vila_Mariana_AnexoI_R01.pdf: fachada, interiores das áreas comuns, apto modelo.",
+  "turnos": [
+    "proposta da NID pra OUSY, Vila Mariana, A/C Yuri: design de fachada, apto modelo decorado de 3 dorm e projeto de interiores da piscina e da academia"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_nid",
+    "cliente": {
+      "empresa": "ousy",
+      "contato": "yuri"
+    },
+    "categorias": {
+      "nid_fachada": [
+        {
+          "contem": "fachada"
+        }
+      ],
+      "nid_interiores": [
+        {
+          "contem": "modelo"
+        },
+        {
+          "contem": "piscina"
+        },
+        {
+          "contem": "academia"
+        }
+      ]
+    }
+  }
+}

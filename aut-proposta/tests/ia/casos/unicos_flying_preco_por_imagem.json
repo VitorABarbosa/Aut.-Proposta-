@@ -1,0 +1,40 @@
+{
+  "origem": "Flying_Unicos_Joao_Casseb_AnexoI_R02.pdf: 12 externas e 2 implantações a 2.400 cada.",
+  "turnos": [
+    "Flying pra UNICOS, projeto João Casseb, A/C Manoela. Externas: fotomontagem masterplan, fotomontagem fase 01, voo de pássaro masterplan, voo de pássaro fase 01, avenida comercial, praça de lazer. Plantas: implantação masterplan, implantação fase 01. Fechamos 2.400 por imagem"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_flying",
+    "cliente": {
+      "empresa": "unicos",
+      "ref": "casseb",
+      "contato": "manoela"
+    },
+    "preco_por_imagem": 2400,
+    "categorias": {
+      "externas": [
+        {
+          "contem": "masterplan"
+        },
+        {
+          "contem": "fase 01"
+        },
+        {
+          "contem": "passaro|pássaro"
+        },
+        {
+          "contem": "avenida"
+        },
+        {
+          "contem": "praça|praca"
+        }
+      ],
+      "plantas": [
+        {
+          "contem": "implanta"
+        }
+      ]
+    },
+    "quantidade_minima": 8
+  }
+}

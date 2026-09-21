@@ -98,3 +98,20 @@ ALTER TABLE propostas ADD COLUMN IF NOT EXISTS tabela_precos text NOT NULL DEFAU
 ALTER TABLE propostas ADD COLUMN IF NOT EXISTS emissor text NOT NULL DEFAULT 'flying';
 UPDATE propostas SET emissor = 'rinno' WHERE tabela_precos = 'rinno' AND emissor = 'flying';
 UPDATE propostas SET emissor = 'nid'   WHERE tabela_precos = 'nid'   AND emissor = 'flying';
+
+-- Registro de cada rodada do chat: o que o usuário mandou, o que a IA chamou
+-- e o que respondeu. É a matéria-prima para medir a inteligência — sem isso,
+-- toda mudança de prompt é palpite. Nunca derruba o chat: a gravação falha em
+-- silêncio (ver app/db/repo_chat_log.py).
+CREATE TABLE IF NOT EXISTS chat_log (
+    id            serial PRIMARY KEY,
+    criado_em     timestamptz NOT NULL DEFAULT now(),
+    modelo        text,
+    mensagens     jsonb NOT NULL,
+    ferramentas   jsonb NOT NULL DEFAULT '[]',
+    resposta      jsonb NOT NULL,
+    emissor       text,
+    duracao_ms    integer,
+    erro          text
+);
+CREATE INDEX IF NOT EXISTS chat_log_criado_em_idx ON chat_log (criado_em DESC);
