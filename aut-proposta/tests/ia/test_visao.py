@@ -24,11 +24,26 @@ def _dimensoes(data_url: str) -> tuple[int, int]:
         return img.size
 
 
-def test_print_grande_e_reduzido_para_o_lado_maximo():
-    img = visao.normalizar_imagem(_data_url(_png(2400, 1200)))
-    assert _dimensoes(img.url) == (visao.LADO_MAXIMO, visao.LADO_MAXIMO // 2)
+def test_print_largo_e_reduzido_pela_largura():
+    img = visao.normalizar_imagem(_data_url(_png(3200, 1600)))
+    assert _dimensoes(img.url) == (visao.LARGURA_MAXIMA, visao.LARGURA_MAXIMA // 2)
     assert img.mime == "image/jpeg"
     assert img.url.startswith("data:image/jpeg;base64,")
+
+
+def test_print_alto_de_email_mantem_a_largura_que_da_para_ler():
+    """A régua antiga era o MAIOR lado: 1200x3000 virava 560x1400 e a letra
+    miúda sumia — foi assim que "2º ao 13º Pavimento" chegou como "2º ao 3º".
+    Alto e estreito tem de passar inteiro."""
+    img = visao.normalizar_imagem(_data_url(_png(1200, 3000)))
+    assert _dimensoes(img.url) == (1200, 3000)
+
+
+def test_print_altissimo_e_reduzido_pela_altura_sem_perder_proporcao():
+    img = visao.normalizar_imagem(_data_url(_png(1200, 7200)))
+    largura, altura = _dimensoes(img.url)
+    assert altura == visao.ALTURA_MAXIMA
+    assert largura == 600  # proporção preservada
 
 
 def test_print_pequeno_nao_e_esticado():

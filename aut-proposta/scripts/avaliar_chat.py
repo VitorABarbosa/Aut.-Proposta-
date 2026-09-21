@@ -6,6 +6,12 @@ script manda os turnos do usuário para `responder`, um a um, e confere a
 chamada que a IA fez — ferramenta certa, categorias certas, preços ditos pelo
 usuário, sem perguntas que não deveria fazer.
 
+Caso com o campo `literal` mede a OUTRA ponta: a etapa 2 da leitura do print.
+Ele traz a transcrição literal de um print (o que a etapa 1 copiou) e o script
+roda só a classificação, conferindo que nenhuma linha se perdeu no caminho e
+que o A/C não saiu do lado errado. É o teste do erro que apagou 28 dos 39
+itens de um e-mail.
+
 Uso (precisa da IA e do catálogo no banco):
 
     DATABASE_URL=... OPENAI_API_KEY=... python -m scripts.avaliar_chat
@@ -111,6 +117,69 @@ def verificar(esperado: dict, nome: str | None, estrutura: dict | None,
     return falhas
 
 
+def _linhas_de_itens(bloco: str) -> list[str]:
+    """As linhas de ITENS do bloco da leitura, até o rótulo seguinte."""
+    linhas, dentro = [], False
+    for linha in bloco.splitlines():
+        crua = linha.strip()
+        if crua.upper().startswith("ITENS:"):
+            dentro = True
+            continue
+        if dentro:
+            if re.match(r"^[A-ZÀ-Ú/ ]{3,}:", crua):   # DÚVIDAS:, OBSERVAÇÕES:
+                break
+            if crua.startswith("-") and "nenhum item" not in normalizar(crua):
+                linhas.append(crua.lstrip("- ").strip())
+    return linhas
+
+
+def _campo(bloco: str, rotulo: str) -> str:
+    for linha in bloco.splitlines():
+        if linha.strip().upper().startswith(f"{rotulo.upper()}:"):
+            return linha.split(":", 1)[1].strip()
+    return ""
+
+
+def verificar_leitura(esperado: dict, bloco: str) -> list[str]:
+    """Confere a classificação de um print: o que não pode sumir e o A/C."""
+    falhas: list[str] = []
+    itens = _linhas_de_itens(bloco)
+
+    if "itens_total" in esperado and len(itens) != esperado["itens_total"]:
+        falhas.append(f"itens: esperava {esperado['itens_total']}, veio {len(itens)}")
+    if "itens_minimo" in esperado and len(itens) < esperado["itens_minimo"]:
+        falhas.append(f"itens: esperava ao menos {esperado['itens_minimo']}, veio {len(itens)}")
+
+    for trecho in esperado.get("contem") or []:
+        if not any(_bate(trecho, item) for item in itens):
+            falhas.append(f"nenhum item contendo {trecho!r} (veio {len(itens)} itens)")
+
+    for rotulo, chave in (("A/C", "ac"), ("CONSTRUTORA", "construtora"),
+                          ("EMPREENDIMENTO", "empreendimento")):
+        valor = _campo(bloco, rotulo)
+        if chave in esperado and not _bate(esperado[chave], valor):
+            falhas.append(f"{rotulo}: esperava conter {esperado[chave]!r}, veio {valor!r}")
+        nao = esperado.get(f"{chave}_nao")
+        if nao and _bate(nao, valor):
+            falhas.append(f"{rotulo}: NÃO podia ser {valor!r} (é gente nossa, não do cliente)")
+
+    for cat, quantidade in (esperado.get("por_categoria") or {}).items():
+        achados = [i for i in itens if normalizar(i).startswith(normalizar(cat))]
+        if len(achados) != quantidade:
+            falhas.append(f"categoria {cat}: esperava {quantidade} itens, veio {len(achados)}")
+    return falhas
+
+
+def rodar_leitura(conn, caso: dict) -> tuple[list[str], str]:
+    """Etapa 2 da leitura, a partir da transcrição literal guardada no caso."""
+    from app.db.repo_precos import carregar_tabela_precos
+    from app.ia.leitura_print import _chamar_modelo_texto, montar_prompt
+
+    tabela = carregar_tabela_precos(conn)
+    bloco = _chamar_modelo_texto(montar_prompt(tabela), caso["literal"])
+    return verificar_leitura(caso["esperado"], bloco), bloco
+
+
 def ultima_precificacao(traco: list[dict]) -> tuple[str | None, dict | None]:
     for chamada in reversed(traco):
         nome = chamada.get("nome", "")
@@ -121,6 +190,10 @@ def ultima_precificacao(traco: list[dict]) -> tuple[str | None, dict | None]:
 
 def rodar_caso(conn, caso: dict) -> tuple[list[str], list[dict], list[str]]:
     from app.ia.chat import responder
+
+    if caso.get("literal"):
+        falhas, bloco = rodar_leitura(conn, caso)
+        return falhas, [], [bloco]
 
     mensagens: list[dict] = []
     traco: list[dict] = []

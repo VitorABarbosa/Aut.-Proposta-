@@ -112,10 +112,31 @@ da própria. Escolher a ferramenta é escolher a empresa; categoria de outra
 empresa deixa de ser possível. O prompt traz exemplos tirados de propostas
 reais, e todo erro de ferramenta é repassado ao usuário como está.
 
+### Leitura do print, em duas etapas
+
+Print de e-mail passa por `app/ia/leitura_print.py` em **duas** chamadas, não
+uma:
+
+1. **Copiar** (visão, sem catálogo): transcrever todas as linhas do print, na
+   ordem, com os cabeçalhos de seção, sem classificar nada.
+2. **Classificar** (texto, com catálogo): a transcrição literal vira o bloco
+   CONSTRUTORA/EMPREENDIMENTO/A/C/ITENS/DÚVIDAS.
+
+Ler e classificar de uma vez era o que fazia a leitura perder item: num e-mail
+com 39 ambientes o modelo gastava a atenção decidindo categoria e devolvia 11
+linhas. Sem imagem na etapa 2, ele enxerga a lista inteira e consegue contá-la.
+O downscale limita largura e altura **separadamente** pelo mesmo motivo: com um
+teto no maior lado, print alto virava 560px de largura e faixa de andar chegava
+com o número errado.
+
+### Medindo a inteligência (continuação)
+
 Toda rodada fica em `chat_log` (mensagens, chamadas de ferramenta, resposta,
 modelo, duração). Conversa que deu errado vira um **caso-ouro** em
 `tests/ia/casos/*.json`: os turnos do usuário e o que a última chamada de
-precificação precisa conter. O avaliador roda todos contra o modelo de verdade:
+precificação precisa conter. Caso com o campo `literal` mede a outra ponta — a
+etapa 2 da leitura, a partir da transcrição de um print de verdade. O avaliador
+roda todos contra o modelo de verdade:
 
 ```bash
 DATABASE_URL=... OPENAI_API_KEY=... python -m scripts.avaliar_chat
