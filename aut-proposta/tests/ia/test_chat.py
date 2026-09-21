@@ -500,6 +500,22 @@ def test_prompt_traz_exemplos_reais_e_regra_de_uma_unidade():
     assert "precificar_proposta" not in prompt
 
 
+def test_prompt_manda_precificar_antes_de_perguntar():
+    """A IA interrogava em vez de precificar: perguntava quem emitia (usando o
+    nome da coordenadora do e-mail), oferecia a construtora como A/C, perguntava
+    MCMV e preço por imagem — quatro perguntas, nenhum valor na tela."""
+    prompt = chat.SYSTEM_PROMPT
+    assert "PRECIFIQUE PRIMEIRO, PERGUNTE DEPOIS" in prompt
+    assert "NÃO PERGUNTE ISSO" in prompt
+    assert "QUEM EMITE É SEMPRE UMA DAS NOSSAS TRÊS" in prompt
+    # MCMV e preço por imagem têm default, não pergunta.
+    assert "assuma tabela_precos='padrao'" in prompt
+    assert 'Nunca pergunte "você já tem um preço por imagem definido?"' in prompt
+    assert "use 'padrao' e siga — não pergunte" in prompt
+    # A/C é pessoa; sem pessoa, vai vazio e vira pendência do preview.
+    assert "A/C é PESSOA" in prompt
+
+
 # ---------- rastro e registro ----------
 
 
