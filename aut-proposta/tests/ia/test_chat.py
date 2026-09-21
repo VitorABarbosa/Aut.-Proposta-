@@ -569,3 +569,59 @@ def test_print_em_base64_nao_vai_para_o_log():
     from app.db.repo_chat_log import _sem_base64
     saida = _sem_base64({"content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]})
     assert saida["content"][0]["image_url"]["url"].startswith("<imagem ")
+
+
+# ---------- o preview não pode ser apagado por uma segunda chamada ----------
+
+
+def test_segunda_chamada_pobre_nao_apaga_o_que_a_primeira_precificou(db, monkeypatch):
+    """O que aconteceu com a Tavares e Rosseti: a IA precificou o tour (7 áreas,
+    R$ 29.050), chamou a ferramenta de novo só com o cliente para comentar que
+    não tinha identificado as imagens, e o preview ficou zerado — cliente
+    preenchido, nenhum item, R$ 0,00."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    cliente = {"empresa": "Tavares e Rosseti", "ref": "Fernando de Noronha",
+               "contato": "Luis"}
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
+            "cliente": cliente,
+            "tour_virtual": ["Elaboração 3d", "Render 360 VR", "Versão mobile"],
+            "ambientes": 7}}, id_="a")]),
+        _msg(tool_calls=[_tool_call("precificar_flying",
+                                    {"estrutura": {"cliente": cliente}}, id_="b")]),
+        _msg(content="Tour Virtual (7 áreas): R$ 29.050,00. Faltam as 30 imagens."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+
+    out = chat.responder(db, [{"role": "user", "content": "faremos 7"}])
+
+    lev = out["levantamento"]
+    assert lev is not None
+    orc = lev["fechado"]["orcamento"]
+    assert orc["total_imagens"] == 3, "a chamada vazia apagou os itens do preview"
+    assert orc["subtotal"] == 7 * (2500 + 1200 + 450)
+    assert lev["estrutura"]["ambientes"] == 7
+
+
+def test_chamada_que_esvazia_de_proposito_continua_valendo(db, monkeypatch):
+    """"tira tudo" é ordem: uma rodada com uma única chamada sem itens vale."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
+            "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"}}})]),
+        _msg(content="Tirei tudo."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+    out = chat.responder(db, [{"role": "user", "content": "tira tudo"}])
+    assert out["levantamento"]["fechado"]["orcamento"]["total_imagens"] == 0
+
+
+def test_prompt_manda_uma_chamada_por_resposta_e_quantidade_sem_descricao():
+    prompt = chat.SYSTEM_PROMPT
+    assert "UMA chamada por resposta" in prompt
+    assert "QUANTIDADE SEM DESCRIÇÃO CONTINUA SENDO ITEM" in prompt
+    assert 'NUNCA responda "não consegui identificar as 30 imagens"' in prompt

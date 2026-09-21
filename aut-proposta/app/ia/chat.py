@@ -89,6 +89,14 @@ PROPOSTA É DE UMA EMPRESA SÓ. Se o pedido misturar serviços de empresas
 diferentes (ex.: imagens + filme da Rinno), avise e pergunte por qual começar —
 depois é só fazer a outra.
 
+QUANTIDADE SEM DESCRIÇÃO CONTINUA SENDO ITEM. "30 imagens a definir", "umas 10
+internas, depois eu mando quais" → crie as 30 (ou 10) entradas com a descrição
+"A definir", na categoria que a pessoa citou; se ela falou só "imagens", use
+ilustrações externas e diga numa linha que falta a divisão entre externas e
+internas. O valor tem de aparecer na tela — a descrição de cada cena chega
+depois. NUNCA responda "não consegui identificar as 30 imagens": a quantidade
+você já tem, e é ela que faz o preço.
+
 UMA UNIDADE POR ITEM, SALVO SE DITO: filme, tour, projeto e app são um por
 pedido — "um filme institucional" é UM item; não pergunte "quantas unidades".
 Imagem é por cena: "três fachadas" são três entradas.
@@ -134,6 +142,10 @@ COMO ENTENDER O PEDIDO (releia a conversa inteira antes de responder):
   plantas" — aplique a mudança sobre a estrutura atual e precifique de novo.
 - Sempre que a estrutura mudar, chame a ferramenta de precificação de novo: o
   preview ao lado é o resultado da ÚLTIMA chamada, não do que você escreveu.
+- UMA chamada por resposta, com a estrutura INTEIRA. Cada chamada substitui o
+  preview: chamar de novo só com o cliente, para comentar o que falta, apaga
+  tudo que você acabou de precificar. O que você tem a dizer vai no texto da
+  resposta, nunca numa segunda chamada mais pobre.
 - Se não entendeu o pedido, pergunte o que faltou em uma frase — não responda
   por aproximação nem mude de assunto.
 
@@ -204,7 +216,16 @@ EXEMPLOS (pedidos reais → chamada certa; copie o padrão):
    interiores da piscina e da academia" → precificar_nid {{..., nid_fachada:
    ["Design de fachada"], nid_interiores: ["Apto modelo decorado 3 dorm",
    "Piscina (área comum)", "Academia (área comum)"]}}
-8. "vista virtual das áreas de lazer pra Maskin, projeto Aricanduva, A/C Marcelo"
+8. "30 imagens a definir e tour virtual, pra Tavares e Rosseti, projeto Fernando
+   de Noronha, A/C Luis" → precifique JÁ o que dá: precificar_flying
+   {{cliente: {{empresa: "Tavares e Rosseti", ref: "Fernando de Noronha",
+   contato: "Luis"}}, externas: ["A definir", ... 30 vezes]}}, e na mesma
+   resposta pergunte quantas áreas de lazer o empreendimento tem (o tour
+   precisa). Quando vier "7", UMA chamada com a estrutura inteira de novo —
+   as 30 imagens MAIS tour_virtual: ["Elaboração 3d", "Render 360 VR",
+   "Versão mobile offline"] e ambientes: 7. Nunca reenvie sem as imagens:
+   a chamada nova substitui o preview.
+9. "vista virtual das áreas de lazer pra Maskin, projeto Aricanduva, A/C Marcelo"
    → primeiro pergunte "quantas áreas de lazer o empreendimento tem?"; com a
    resposta ("7"), chame precificar_flying {{..., tour_virtual: ["Elaboração 3d",
    "Render 360 VR", "Versão mobile offline"], ambientes: 7}} — as três etapas e
@@ -665,6 +686,32 @@ def responder(conn: psycopg.Connection, mensagens: list[dict],
         )
 
 
+def _itens_de(lev: dict | None) -> int:
+    orcamento = ((lev or {}).get("fechado") or {}).get("orcamento") or {}
+    return int(orcamento.get("total_imagens") or 0)
+
+
+def _melhor_levantamento(atual: dict | None, novo: dict) -> dict:
+    """Qual levantamento vai para o preview quando a IA chama a ferramenta mais
+    de uma vez na MESMA resposta.
+
+    Em geral vale o último: é assim que "na verdade são 4" corrige o anterior.
+    A exceção é a chamada que chega vazia depois de uma que precificou — foi o
+    que zerou a proposta da Tavares e Rosseti, onde a IA precificou o tour de 7
+    áreas (R$ 29.050) e chamou a ferramenta de novo só com o cliente, para
+    comentar que faltavam as imagens: o preview ficou com o cliente preenchido,
+    nenhum item e R$ 0,00.
+
+    Esvaziar de propósito ("tira tudo") continua valendo, porque aí a rodada
+    tem só essa chamada e não há nada melhor para preservar.
+    """
+    if atual is None:
+        return novo
+    if _itens_de(novo) == 0 and _itens_de(atual) > 0:
+        return atual
+    return novo
+
+
 def _emissor_do_traco(traco: list[dict]) -> str | None:
     for chamada in reversed(traco):
         emissor = _emissor_da_ferramenta(chamada.get("nome", ""))
@@ -727,7 +774,7 @@ def _responder(conn: psycopg.Connection, mensagens: list[dict],
                                  f"{exc}. Corrija e tente de novo."},
                         ensure_ascii=False), None
                 if lev is not None:
-                    levantamento = lev
+                    levantamento = _melhor_levantamento(levantamento, lev)
                 traco.append({"nome": tc.function.name, "args": args_tc, "resultado": resultado})
                 _citar_propostas(tc.function.name, args_tc, resultado, citadas)
                 llm.append({"role": "tool", "tool_call_id": tc.id, "content": resultado})
