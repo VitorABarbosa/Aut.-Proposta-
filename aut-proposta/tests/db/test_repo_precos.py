@@ -14,19 +14,18 @@ def test_carrega_categorias_novas_com_meta_e_ordem(db):
     tabela = carregar_tabela_precos(db)  # tabela="padrao" por padrão
     nomes = list(tabela.dados.keys())
 
-    assert "filmes" in nomes
+    assert "tour_virtual" in nomes
     assert "tecnologia" in nomes
-    assert len(nomes) == 8  # as 8 categorias do catálogo 2026 (tabela padrao)
+    assert len(nomes) == 5  # a Flying faz imagem, planta, tour e tecnologia
 
     # ordem determinística conforme a coluna `ordem`
     ordens = [tabela.dados[n]["_ordem"] for n in nomes]
     assert ordens == sorted(ordens)
 
-    filmes = tabela.dados["filmes"]
-    assert filmes["_rotulo"] == "Filmes e Takes 3D"
-    assert filmes["_prefixo"] == ""
-    assert filmes["_default"] == 15000
-    assert filmes["_descricao_padrao"] == "Filme 3D — 60 segundos"
+    tour = tabela.dados["tour_virtual"]
+    assert tour["_rotulo"] == "Tour Virtual / VR 360"
+    assert tour["_prefixo"] == ""
+    assert tour["_default"] == 1200
 
     tecnologia = tabela.dados["tecnologia"]
     assert tecnologia["_rotulo"] == "Tecnologias Interativas"
@@ -46,10 +45,10 @@ def test_mcmv_carrega_precos_proprios(db):
     assert mcmv.dados["internas"]["_default"] == 1500
     assert padrao.dados["internas"]["_default"] == 1750
 
-    # mcmv não tem "tecnologia" nem "estudos" com o mesmo preço da planilha padrão
+    # mcmv não tem "tecnologia" e tem preços próprios
     assert "tecnologia" not in mcmv.dados
-    assert mcmv.dados["estudos"]["_default"] == 11500
-    assert padrao.dados["estudos"]["_default"] == 18000
+    assert "tecnologia" not in mcmv.categorias()
+    assert padrao.dados["tecnologia"]["_default"] == 22800
 
 
 def test_ordem_preservada_primeiro_match_vence(db):

@@ -266,3 +266,26 @@ def test_imagem_nao_ganha_escopo_de_servico(tmp_path):
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "p.docx", DATA, emissor="flying"))
     assert "Catálogo Digital Interativo" not in texto
     assert "Render 360° VR" not in texto
+
+
+def test_cada_filme_sai_com_o_seu_valor_alem_do_total(tmp_path):
+    """A proposta enviada mostrava só "Filmes — Valor total: R$38.000,00", e
+    o cliente tinha de perguntar quanto custava cada filme."""
+    fechado = _fechado([("rinno_filmes", "Filmes", [
+        ("Filme Conceito de até 2:30 (Dois Minutos e Meio)", 19000),
+        ("Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)", 14000),
+        ("Filme Viral de até 1:00 (Um Minuto) — formato 9:16", 4000),
+    ])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", DATA, emissor="rinno"))
+
+    assert "2.1 Um Filme Conceito de até 2:30 (Dois Minutos e Meio) — R$19.000,00" in texto
+    assert "2.2 Um Filme Corretor / Produto de até 1:30 (Um Minuto e Meio) — R$14.000,00" in texto
+    assert "2.3 Um Filme Viral de até 1:00 (Um Minuto) — formato 9:16 — R$4.000,00" in texto
+    # O total da categoria continua, somando os três.
+    assert "Filmes — Valor total: R$37.000,00" in texto
+
+
+def test_nid_tambem_mostra_o_valor_de_cada_item(tmp_path):
+    fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 22000)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
+    assert "Design de Fachada — R$22.000,00" in texto

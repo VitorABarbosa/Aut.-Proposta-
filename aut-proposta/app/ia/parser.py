@@ -257,9 +257,27 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
     }
 
 
-def _system_prompt(categorias: list[str] | tuple[str, ...]) -> str:
+def catalogo_para_prompt(tabela) -> str:
+    """Categorias com o que cada uma vende, como no prompt do chat.
+
+    Sem isto o Texto direto só via nomes de chave (`rinno_filmes`,
+    `tour_virtual`) e não tinha como saber que "pacote de filme conceito,
+    produto e viral" é um item do catálogo da Rinno — o pedido era entendido
+    pela metade e o preview saía vazio.
+    """
+    linhas = []
+    for cat in tabela.categorias():
+        meta = tabela.meta(cat)
+        itens = "; ".join(i["descricao"] for i in tabela.dados[cat].get("tabela", []))
+        linhas.append(f"- {cat} ({meta['rotulo']}): {itens}")
+    return "\n".join(linhas)
+
+
+def _system_prompt(categorias: list[str] | tuple[str, ...], catalogo: str = "") -> str:
     linhas_schema = ",\n".join(f'  "{cat}": ["nome do item", ...]' for cat in categorias)
     categorias_txt = ", ".join(categorias)
+    bloco_catalogo = (f"\n\nCATÁLOGO (o que cada categoria vende — use para achar a "
+                      f"categoria certa):\n{catalogo}" if catalogo else "")
     return f"""Você é um assistente que converte descrições livres em português de
 propostas comerciais da Flying Studio em JSON estruturado. Devolva APENAS JSON válido,
 sem markdown, sem texto extra.
@@ -277,7 +295,7 @@ Schema:
 }}
 
 Categorias ativas do catálogo: {categorias_txt}. Use SOMENTE essas chaves de
-categoria (além de cliente/desconto/estrategia) — não invente outras.
+categoria (além de cliente/desconto/estrategia) — não invente outras.{bloco_catalogo}
 
 Regras importantes:
 - Se o usuário mencionou explicitamente "preço de planilha" ou "tabela padrão",
@@ -297,6 +315,15 @@ Regras importantes:
 - Se mencionar "preços individuais por imagem" ou "coluna de valor",
   mostrar_precos_individuais = true.
 - NUNCA invente preços ou valores em reais.
+- O pedido vem em prosa, não em lista ("vamos fazer um pacote de filme
+  conceito, produto e viral para a X"). Ache os itens no meio do texto: cada
+  serviço citado vira uma entrada na categoria dele, mesmo sem título de
+  seção. Item que existe no catálogo acima entra com o nome do catálogo.
+- Serviço com nome próprio (maquete, tour, aplicação web, filme, take,
+  interiores, stand) NUNCA vai em ilustrações externas/internas — ilustração
+  é cena do empreendimento ("fachada noturna", "piscina", "hall").
+- Quantidade sem descrição continua sendo item: "30 imagens a definir" são 30
+  entradas com a descrição "A definir".
 """
 
 
@@ -304,7 +331,8 @@ Regras importantes:
 SYSTEM_PROMPT = _system_prompt(CATEGORIAS_FALLBACK)
 
 
-def _chamar_openai(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
+def _chamar_openai(texto: str, categorias: list[str] | tuple[str, ...] | None = None,
+                   catalogo: str = "") -> dict[str, Any] | None:
     """Chamada crua ao modelo. Devolve None sem OPENAI_API_KEY; propaga exceções."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -319,7 +347,7 @@ def _chamar_openai(texto: str, categorias: list[str] | tuple[str, ...] | None = 
         response_format={"type": "json_object"},
         temperature=0,
         messages=[
-            {"role": "system", "content": _system_prompt(categorias)},
+            {"role": "system", "content": _system_prompt(categorias, catalogo)},
             {"role": "user", "content": texto},
         ],
     )
@@ -342,7 +370,8 @@ def _preencher_defaults(data: dict[str, Any], categorias: list[str] | tuple[str,
     return data
 
 
-def parse(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
+def parse(texto: str, categorias: list[str] | tuple[str, ...] | None = None,
+          catalogo: str = "") -> dict[str, Any]:
     """Tenta OpenAI; em falta de chave ou falha, usa o parser local.
 
     `categorias` são as categorias ativas do catálogo (`TabelaPrecos.categorias()`);
@@ -355,7 +384,7 @@ def parse(texto: str, categorias: list[str] | tuple[str, ...] | None = None) -> 
 
     aviso_falha = None
     try:
-        bruto = _chamar_openai(texto, categorias)
+        bruto = _chamar_openai(texto, categorias, catalogo)
     except Exception as exc:  # noqa: BLE001 — qualquer falha da API cai no local
         bruto = None
         aviso_falha = f"OpenAI indisponível, usando parser local. ({exc})"

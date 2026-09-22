@@ -122,7 +122,7 @@ def test_categorias_dinamicas_via_categorias_meta(tmp_path):
         {"nome": "filmes", "rotulo": "Filmes e Takes 3D"},
         {"nome": "tour_virtual", "rotulo": "Tour Virtual / VR 360"},
         {"nome": "drone", "rotulo": "Drone e Fotografia Aérea"},
-        {"nome": "estudos", "rotulo": "Estudos de Fachada"},
+        {"nome": "drone", "rotulo": "Drone e Fotografia Aérea"},
         {"nome": "tecnologia", "rotulo": "Tecnologias Interativas"},
     ]
     saida = tmp_path / "p.docx"
@@ -134,7 +134,7 @@ def test_categorias_dinamicas_via_categorias_meta(tmp_path):
     assert "2.3 Plantas Humanizadas 2D" in texto
     assert "2.4 Filmes e Takes 3D" in texto
     assert "2.5 Tecnologias Interativas" in texto
-    # Categorias sem itens (tour_virtual/drone/estudos) não geram subtítulo.
+    # Categorias sem itens (tour_virtual/drone) não geram subtítulo.
     assert "Tour Virtual / VR 360" not in texto
     assert "Drone e Fotografia Aérea" not in texto
     assert "Estudos de Fachada" not in texto
@@ -212,13 +212,11 @@ def test_destaques_inline_do_modelo(tmp_path):
     assert doc.paragraphs[-2].text == "De acordo,"
 
 
-def test_precos_individuais_opcionais(tmp_path):
+def test_cada_item_sai_com_o_seu_valor(tmp_path):
+    """Era opcional e vinha desligado: a proposta mostrava só o total da
+    categoria, e o cliente tinha de perguntar quanto custava cada item."""
     saida = tmp_path / "p.docx"
-    gerar_docx(CLIENTE, _fechado_galli(), saida, mostra_precos_individuais=True)
+    gerar_docx(CLIENTE, _fechado_galli(), saida)
     texto = _texto_completo(saida)
     assert "1. Perspectiva Fachada — R$3.000,00" in texto
-
-    saida2 = tmp_path / "p2.docx"
-    gerar_docx(CLIENTE, _fechado_galli(), saida2, mostra_precos_individuais=False)
-    texto2 = _texto_completo(saida2)
-    assert "— R$3.000,00" not in texto2  # sem preço por item; só o Valor total
+    assert "Valor total" in texto          # o total da categoria continua

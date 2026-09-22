@@ -13,7 +13,7 @@ def test_migracao_e_idempotente_rodando_2x(db):
     # na 1a vez e já migrado na 2a).
     c1 = migrar(db)
     c2 = migrar(db)
-    assert c1 == c2 == {"categorias": 23, "itens": c1["itens"]}
+    assert c1 == c2 == {"categorias": 17, "itens": c1["itens"]}
 
     tabela = carregar_tabela_precos(db, "padrao")
     assert "tecnologia" in tabela.dados
@@ -24,7 +24,7 @@ def test_migracao_e_idempotente_rodando_2x(db):
 
     # As tabelas das outras duas empresas chegam pelo mesmo caminho.
     rinno = carregar_tabela_precos(db, "rinno")
-    assert rinno.classificar("filme conceito", "rinno_filmes")["preco"] == 14000
+    assert rinno.classificar("filme conceito", "rinno_filmes")["preco"] == 19000
     nid = carregar_tabela_precos(db, "nid")
     assert nid.classificar("design de fachada", "nid_fachada")["preco"] == 22000
 

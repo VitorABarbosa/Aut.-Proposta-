@@ -200,7 +200,7 @@ def _escopo_de(descricao: str) -> list[list[Seg]]:
 
 
 def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, Any],
-             data: dt.date, mostra_precos_individuais: bool = False) -> None:
+             data: dt.date) -> None:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
 
@@ -222,10 +222,10 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
             # No modelo oficial o item é "Um Filme Conceito de até 2:30…".
             desc = item["descricao"]
             artigo = "Um " if normalizar(desc).startswith("filme") else ""
-            titulo = f"2.{sub} {artigo}{desc}"
-            if mostra_precos_individuais:
-                titulo += f" — {brl(item['preco'])}"
-            _subtitulo(doc, titulo)
+            # O valor de cada item sai SEMPRE. A proposta que só mostra o
+            # total da categoria obriga o cliente a perguntar quanto custa
+            # cada filme — e a resposta some do documento enviado.
+            _subtitulo(doc, f"2.{sub} {artigo}{desc} — {brl(item['preco'])}")
             escopo = _escopo_de(desc)
             # "Este item inclui:" só quando há lista; o viral tem uma linha só
             # ("Conteúdo: …") e no modelo ela vem direto.

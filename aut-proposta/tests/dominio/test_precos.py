@@ -75,11 +75,15 @@ def test_meta_devolve_rotulo_prefixo_ordem():
     assert m == {"rotulo": "Plantas Humanizadas 2D", "prefixo": "Planta Humanizada ", "ordem": 3}
 
 
-def test_json_padrao_tem_8_categorias_incluindo_filmes_e_tecnologia():
+def test_json_padrao_traz_so_o_que_a_flying_faz():
     t = TabelaPrecos()
     nomes = t.categorias()
-    assert len(nomes) == 8
-    assert "filmes" in nomes and "tecnologia" in nomes
+    assert len(nomes) == 5
+    assert "tecnologia" in nomes and "tour_virtual" in nomes
+    # Filme é da Rinno; estudo de fachada virou design de fachada, da NID;
+    # drone e fotografia aérea são fotomontagem ou voo de pássaro (externas).
+    for fora in ("filmes", "drone", "estudos"):
+        assert fora not in nomes
     # ordem determinística
     assert nomes == sorted(nomes, key=lambda c: t.meta(c)["ordem"])
 

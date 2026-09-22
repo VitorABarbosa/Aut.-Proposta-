@@ -33,15 +33,12 @@ def gerar_docx(
     fechado: dict[str, Any],
     saida: Path,
     data: dt.date | None = None,
-    mostra_precos_individuais: bool = False,
     emissor: str | None = None,
 ) -> Path:
     """Escreve a proposta da empresa `emissor` (default: Flying) em `saida`."""
     emp = empresa(emissor)
     doc = abrir_documento(emp)
-    ESCRITORES[emp.chave](
-        doc, emp, cliente, fechado, data or dt.date.today(), mostra_precos_individuais
-    )
+    ESCRITORES[emp.chave](doc, emp, cliente, fechado, data or dt.date.today())
     saida.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(saida))
     return saida

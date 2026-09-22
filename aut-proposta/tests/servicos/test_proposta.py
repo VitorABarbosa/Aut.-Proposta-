@@ -33,16 +33,21 @@ def test_parse_texto_passa_categorias_do_catalogo_ao_parser(db, monkeypatch):
     _prep(db)
     recebido = {}
 
-    def _parse_fake(texto, categorias=None):
+    def _parse_fake(texto, categorias=None, catalogo=""):
         recebido["texto"] = texto
         recebido["categorias"] = categorias
+        recebido["catalogo"] = catalogo
         return {"cliente": {"empresa": "GALLI"}}
 
     monkeypatch.setattr("app.ia.parser.parse", _parse_fake)
-    out = svc.parse_texto(db, "Cliente: GALLI\nFilmes: Filme institucional")
+    out = svc.parse_texto(db, "Cliente: GALLI\nTour virtual: Render 360")
     assert out["cliente"]["empresa"] == "GALLI"
-    assert "filmes" in recebido["categorias"]
+    assert "tour_virtual" in recebido["categorias"]
     assert "tecnologia" in recebido["categorias"]
+    # O Texto direto recebe o catálogo, não só os nomes das categorias: sem
+    # saber o que cada uma vende, o pedido em prosa saía vazio.
+    assert "Tour Virtual / VR 360" in recebido["catalogo"]
+    assert "Maquete Eletrônica" in recebido["catalogo"]
 
 
 def test_levantar_planilha_precos_do_banco(db):
@@ -225,9 +230,9 @@ def test_levantar_da_rinno_usa_a_tabela_da_rinno(db):
 
     assert out["emissor"] == "rinno" and out["tabela_precos"] == "rinno"
     orc = out["fechado"]["orcamento"]
-    assert orc["rinno_filmes"]["total"] == 24000   # conceito 14000 + produto 10000
+    assert orc["rinno_filmes"]["total"] == 33000   # conceito 19000 + produto 14000
     assert orc["rinno_takes"]["total"] == 650
-    assert out["fechado"]["financeiro"]["total"] == 24650.0
+    assert out["fechado"]["financeiro"]["total"] == 33650.0
 
 
 def test_item_de_servico_sai_com_o_nome_do_catalogo(db):
@@ -321,11 +326,11 @@ def test_filme_em_categoria_da_flying_com_emissor_rinno_e_precificado(db):
 
 def test_remap_nunca_cruza_de_uma_empresa_para_outra(db):
     """`rinno_filmes` com emissor flying não vira `filmes`: são produtos
-    diferentes. Fica o aviso, como antes."""
+    diferentes. Fica o aviso, agora dizendo de quem é o serviço."""
     _prep(db)
     est = _estrutura() | {"rinno_filmes": ["Filme conceito"]}
     out = svc.levantar(db, est)
-    assert any("rinno_filmes" in a and "não está na tabela" in a for a in out["avisos"])
+    assert any("RINNO FILMS" in a and "não da FLYING STUDIO" in a for a in out["avisos"])
     # Entra zerado, pendente — não some.
     assert out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]["preco"] == 0
 
@@ -416,8 +421,8 @@ def test_item_com_preco_fechado_usa_o_valor_dito(db):
     itens = out["fechado"]["orcamento"]["rinno_filmes"]["itens"]
     assert itens[0]["descricao"] == "Filme institucional de até 2:00"
     assert itens[0]["preco"] == 15000 and itens[0]["fonte"] == "informado"
-    assert itens[1]["preco"] == 10000 and itens[1]["fonte"] == "planilha:filme_produto"
-    assert out["fechado"]["financeiro"]["total"] == 25000.0
+    assert itens[1]["preco"] == 14000 and itens[1]["fonte"] == "planilha:filme_produto"
+    assert out["fechado"]["financeiro"]["total"] == 29000.0
 
 
 def test_preco_informado_ganha_do_preco_por_imagem_e_do_ajuste(db):
@@ -526,9 +531,10 @@ def test_cena_de_verdade_continua_sendo_cena(catalogo):
     ("Vista virtual web multiplataforma", "tour_virtual"),
     ("Desenvolvimento de aplicação web para tela touch", "tecnologia"),
     ("Explorador D.Brave", "tecnologia"),
-    ("Estudo de fachada", "estudos"),
-    ("Fotografia aérea com drone", "drone"),
-    ("Filme institucional", "filmes"),
+    ("Estudo de fachada", "nid_fachada"),   # nome antigo do design de fachada
+    # Drone/aérea é fotomontagem, que é ilustração externa — fica onde está.
+    ("Filme institucional", "rinno_filmes"),   # a Flying não faz filme
+    ("Take animado de 7 segundos", "rinno_takes"),
 ])
 def test_cada_servico_sai_das_imagens_para_a_categoria_dele(catalogo, descricao, categoria):
     orc = _levantar(catalogo, internas=[descricao])["fechado"]["orcamento"]

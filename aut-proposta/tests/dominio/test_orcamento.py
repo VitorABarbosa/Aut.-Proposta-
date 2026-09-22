@@ -57,19 +57,20 @@ def test_to_dict_traz_categorias_meta_ordenada():
     ]
 
 
-def test_orcamento_com_filmes_e_tecnologia_soma_e_ordena():
-    real = TabelaPrecos()  # catálogo 2026 completo (8 categorias)
+def test_orcamento_com_tour_e_tecnologia_soma_e_ordena():
+    """A Flying não faz filme — o catálogo dela não tem a categoria."""
+    real = TabelaPrecos()  # catálogo 2026 da Flying
+    assert "filmes" not in real.categorias()
     desc = {
-        "filmes": ["Filme institucional 60 segundos"],
+        "tour_virtual": ["Render 360"],
         "tecnologia": ["Aplicação Web Touch"],
     }
     orc = orcar_pela_planilha(desc, real)
-    assert orc.categorias["filmes"].total == 15000
     assert orc.categorias["tecnologia"].total == 22800
-    assert orc.subtotal == 15000 + 22800
+    assert orc.subtotal == 1200 + 22800
 
     nomes = [c["nome"] for c in orc.to_dict()["_categorias"]]
-    assert nomes.index("filmes") < nomes.index("tecnologia")
+    assert nomes.index("tour_virtual") < nomes.index("tecnologia")
 
 
 # ---------- serviço cobrado por ambiente ----------

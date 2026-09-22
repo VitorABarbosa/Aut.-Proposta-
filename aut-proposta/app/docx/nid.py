@@ -214,7 +214,7 @@ PARCELAS_PAGAMENTO = (
 
 
 def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, Any],
-             data: dt.date, mostra_precos_individuais: bool = False) -> None:
+             data: dt.date) -> None:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
 
@@ -232,11 +232,8 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     for _cat, _rotulo, bloco in itens_orcados(orc):
         for item in bloco["itens"]:
             p = _par(doc, depois=2, recuo=1.0)
-            texto = item["descricao"]
-            if mostra_precos_individuais:
-                texto += f" — {brl(item['preco'])}"
             _run(p, "•   ")
-            _run(p, texto)
+            _run(p, f"{item['descricao']} — {brl(item['preco'])}")
 
     # ===== 3 – Escopo do projeto e entregáveis =====
     _titulo_secao(doc, "3", "ESCOPO DO PROJETO E ENTREGÁVEIS")

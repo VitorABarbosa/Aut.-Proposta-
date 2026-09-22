@@ -467,7 +467,7 @@ def test_ferramenta_da_empresa_manda_mais_que_o_campo_emissor(db):
                        "rinno_filmes": ["Filme conceito"]}},
         ["rinno_filmes", "filmes"])
     assert lev["estrutura"]["emissor"] == "rinno"
-    assert lev["fechado"]["orcamento"]["rinno_filmes"]["total"] == 14000
+    assert lev["fechado"]["orcamento"]["rinno_filmes"]["total"] == 19000
     assert "erro" not in resultado
 
 

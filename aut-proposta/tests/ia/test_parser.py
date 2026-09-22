@@ -43,7 +43,7 @@ def test_parse_local_vazio_avisa():
 
 
 def test_parse_usa_openai_quando_disponivel(monkeypatch):
-    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None: {
+    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None, catalogo="": {
         "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
         "externas": ["Fachada"], "internas": [], "plantas": [],
         "desconto_pct": 10, "estrategia": "planilha",
@@ -68,7 +68,7 @@ def test_parse_cai_para_local_quando_openai_falha(monkeypatch):
 
 def test_parse_openai_complementado_pelo_local(monkeypatch):
     # Modelo devolveu só externas; local completa internas/plantas.
-    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None: {
+    monkeypatch.setattr(parser, "_chamar_openai", lambda texto, categorias=None, catalogo="": {
         "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "—"},
         "externas": ["Fachada vista da calçada"], "internas": [], "plantas": [],
     })
