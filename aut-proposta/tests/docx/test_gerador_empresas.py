@@ -214,12 +214,17 @@ def test_rinno_segue_o_modelo_oficial_em_word(tmp_path):
 
 
 def test_investimento_sai_por_extenso_nas_tres(tmp_path):
-    for emissor, fechado in (("flying", FECHADO_FLYING), ("nid", FECHADO_NID)):
-        saida = gerar_docx(CLIENTE, fechado, tmp_path / f"{emissor}.docx", data=DATA, emissor=emissor)
-        texto = _texto(saida)
-        assert "(" in texto.split("INVESTIMENTO PARA O DESENVOLVIMENTOS")[1].split("\n")[1]
-    texto = _texto(gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "f.docx", data=DATA, emissor="flying"))
+    """A NID tem o seu próprio título de investimento ("5.1 INVESTIMENTO:"),
+    com a redação de "desconto especial"; Flying e Rinno usam o bloco comum."""
+    texto = _texto(gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "f.docx",
+                              data=DATA, emissor="flying"))
+    assert "(" in texto.split("INVESTIMENTO PARA O DESENVOLVIMENTOS")[1].split("\n")[1]
     assert "R$ 3.000,00 (Três Mil Reais)" in texto
+
+    texto_nid = _texto(gerar_docx(CLIENTE, FECHADO_NID, tmp_path / "n.docx",
+                                  data=DATA, emissor="nid"))
+    assert "5.1 INVESTIMENTO:" in texto_nid
+    assert "(" in texto_nid.split("5.1 INVESTIMENTO:")[1].split("\n")[1]
 
 
 # ---------- escopo padrão dos serviços da Flying ----------
@@ -285,10 +290,7 @@ def test_cada_filme_sai_com_o_seu_valor_alem_do_total(tmp_path):
     assert "Filmes — Valor total: R$37.000,00" in texto
 
 
-def test_nid_tambem_mostra_o_valor_de_cada_item(tmp_path):
-    fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 22000)])])
-    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
-    assert "Design de Fachada — R$22.000,00" in texto
+
 
 
 def test_dsbrave_sai_com_os_sete_modulos(tmp_path):
@@ -303,3 +305,55 @@ def test_dsbrave_sai_com_os_sete_modulos(tmp_path):
                    "Espelho de Vendas (integração com CV)"):
         assert modulo in texto, modulo
     assert "D.sbrave — Apartamento Modelo Virtual — R$69.000,00" in texto
+
+
+# ---------- NID: escopo contratado sem preço por item ----------
+
+
+def test_nid_lista_o_escopo_sem_abrir_preco_por_item(tmp_path):
+    """As três propostas conferidas (Tavares e Rosseti/Pantojo,
+    Gremp3/Tucuruvi, Di Biase/Valença) listam só o escopo contratado e fecham
+    um valor único na seção 5 — diferente da Flying e da Rinno."""
+    fechado = _fechado([("nid_interiores", "Projetos de Interiores", [
+        ("Projeto Apto modelo decorado", 20000),
+        ("Projeto do PDV", 15000),
+    ])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
+    assert "Projeto Apto modelo decorado" in texto
+    assert "Projeto do PDV" in texto
+    assert "R$20.000,00" not in texto and "R$15.000,00" not in texto
+
+
+def test_nid_escreve_o_desconto_como_desconto_especial(tmp_path):
+    """"Valor total = 60.000,00 / Valor total com desconto especial de 23,3% =
+    46.000,00", como na proposta da Tavares e Rosseti."""
+    fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 60000)])])
+    fechado["financeiro"] = {"subtotal": 60000, "desconto_pct": 23.3,
+                             "desconto_valor": 14000.0, "total": 46000.0, "rotulo": ""}
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
+    assert "Valor total = R$ 60.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
+    assert "Valor bruto" not in texto
+
+
+def test_nid_sem_desconto_sai_so_o_valor_por_extenso(tmp_path):
+    """Di Biase/Valença: "12.000,00 (Doze Mil Reais)"."""
+    fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 12000)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
+    assert "R$ 12.000,00 (Doze Mil Reais)" in texto
+    assert "desconto especial" not in texto
+
+
+@pytest.mark.parametrize("emissor", EMISSORES)
+def test_desconto_sai_como_desconto_especial_nas_tres(tmp_path, emissor):
+    """A redação é do grupo, não de uma empresa: "(Valor bruto · Desconto)"
+    não é como se escreve em lugar nenhum."""
+    fechado = {"flying": FECHADO_FLYING, "rinno": FECHADO_RINNO, "nid": FECHADO_NID}[emissor]
+    fechado = {**fechado, "financeiro": {"subtotal": 60000, "desconto_pct": 23.3,
+                                         "desconto_valor": 14000.0, "total": 46000.0,
+                                         "rotulo": "parceria"}}
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / f"{emissor}.docx",
+                              DATA, emissor=emissor))
+    assert "Valor total = R$ 60.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
+    assert "Valor bruto" not in texto

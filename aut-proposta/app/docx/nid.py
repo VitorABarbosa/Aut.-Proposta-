@@ -229,11 +229,15 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     # ===== 2 – Escopo contratado =====
     _titulo_secao(doc, "2", "ITENS A SEREM EXECUTADOS")
     _subtitulo(doc, "2.1 Escopo Contratado:")
+    # A NID não abre preço por item: as três propostas conferidas (Tavares e
+    # Rosseti/Pantojo, Gremp3/Tucuruvi, Di Biase/Valença) listam só o escopo
+    # contratado e fecham um valor único na seção 5. É diferente da Flying e da
+    # Rinno, onde cada item mostra o seu valor.
     for _cat, _rotulo, bloco in itens_orcados(orc):
         for item in bloco["itens"]:
             p = _par(doc, depois=2, recuo=1.0)
             _run(p, "•   ")
-            _run(p, f"{item['descricao']} — {brl(item['preco'])}")
+            _run(p, item["descricao"])
 
     # ===== 3 – Escopo do projeto e entregáveis =====
     _titulo_secao(doc, "3", "ESCOPO DO PROJETO E ENTREGÁVEIS")
@@ -257,7 +261,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
 
     # ===== 5 – Investimento, pagamento e serviços adicionais =====
     _titulo_secao(doc, "5", "INVESTIMENTOS E FORMA DE PAGAMENTO")
-    bloco_investimento(doc, "5.1", fin)
+    bloco_investimento(doc, "5.1", fin, titulo="INVESTIMENTO:")
     bloco_pagamento(doc, "5.2", fin, PARCELAS_PAGAMENTO)
 
     _subtitulo(doc, "5.3 SERVIÇOS ADICIONAIS (ACOMPANHAMENTO E GESTÃO):")
