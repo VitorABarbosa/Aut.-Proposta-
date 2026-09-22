@@ -603,3 +603,37 @@ def test_preco_dito_pela_pessoa_manda_no_servico_sem_tabela(catalogo):
     item = lev["fechado"]["orcamento"]["nid_arquitetura"]["itens"][0]
     assert (item["preco"], item["fonte"]) == (18000, "informado")
     assert not any("Sem preço de tabela" in a for a in lev["avisos"])
+
+
+def test_escopo_inteiro_da_tavares_e_rosseti_passa(catalogo):
+    """NID_TavaresRosseti_Pantojo_AnexoI_R01, com os nomes como estão lá —
+    inclusive "Arquitetónico" com o acento errado que veio na proposta."""
+    from app.api.main import _pendencias
+
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "Tavares e Rosseti", "ref": "Pantojo", "contato": "Luis"},
+        "emissor": "nid", "tabela_precos": "nid",
+        "nid_pdv": ["Projeto Retrofit PDV (60m²)"],
+        "nid_interiores": ["Projeto de Interiores Apto Virtual Studio",
+                           "Projeto de Interior Apto Virtual 1Dorm",
+                           "Projeto de Interior Apto Virtual 2Dorm",
+                           "Projeto de Interiores das Áreas Comuns"],
+        "nid_fachada": ["Design de Fachada"],
+        "nid_arquitetura": ["Projeto Executivo Arquitetónico", "Projeto de Paisagismo"]})
+    orc = lev["fechado"]["orcamento"]
+
+    # Cada item cai na chave certa do catálogo — o apto virtual não vira o
+    # modelo decorado só por ter "2 dorm" no nome.
+    fontes = {i["descricao"]: i["fonte"] for cat in ("nid_pdv", "nid_interiores",
+                                                     "nid_fachada", "nid_arquitetura")
+              for i in orc[cat]["itens"]}
+    assert fontes["Projeto Retrofit PDV (60m²)"] == "a_definir:retrofit_pdv"
+    assert fontes["Projeto de Interior Apto Virtual 2Dorm"] == "a_definir:apto_virtual_2dorm"
+    assert fontes["Design de Fachada"] == "planilha:design_fachada"
+    assert fontes["Projeto Executivo Arquitetônico"] == "a_definir:projeto_executivo"
+
+    # Os oito itens entram, o que tem preço soma, e nada trava.
+    assert sum(orc[c]["qtd"] for c in ("nid_pdv", "nid_interiores", "nid_fachada",
+                                       "nid_arquitetura")) == 8
+    assert lev["fechado"]["financeiro"]["total"] == 24500.0
+    assert _pendencias(lev["estrutura"], lev["fechado"]) == []

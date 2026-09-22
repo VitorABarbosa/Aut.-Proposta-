@@ -69,11 +69,15 @@
     {"chave": "design_fachada", "descricao": "Design de Fachada", "preco": 22000, "padroes": ["fachada", "estudo", "cromatico", "cromático"]}]},
   {"nome": "nid_interiores", "ordem": 2, "rotulo": "Projetos de Interiores", "prefixo": "",
    "default": 2500, "descricao_padrao": "Projeto de Interiores — Áreas Comuns / Lazer (por ambiente)", "itens": [
+    {"chave": "apto_virtual_studio", "descricao": "Projeto de Interiores — Apto Virtual Studio", "preco": 0, "padroes": ["virtual.*studio", "studio"]},
+    {"chave": "apto_virtual_1dorm", "descricao": "Projeto de Interiores — Apto Virtual 1 Dormitório", "preco": 0, "padroes": ["virtual.*1 ?dorm"]},
+    {"chave": "apto_virtual_2dorm", "descricao": "Projeto de Interiores — Apto Virtual 2 Dormitórios", "preco": 0, "padroes": ["virtual.*2 ?dorm"]},
     {"chave": "apto_modelo_3dorm", "descricao": "Projeto de Interiores — Apto Modelo Decorado (3 dormitórios)", "preco": 20000, "padroes": ["3 ?dorm", "tres dorm"]},
     {"chave": "apto_modelo_2dorm", "descricao": "Projeto de Interiores — Apto Modelo Decorado (2 dormitórios)", "preco": 14000, "padroes": ["2 ?dorm", "dois dorm", "apto modelo", "apartamento modelo", "modelo decorado"]},
     {"chave": "areas_comuns", "descricao": "Projeto de Interiores — Áreas Comuns / Lazer (por ambiente)", "preco": 2500, "padroes": ["area comum", "areas comuns", "lazer", "ambiente"]}]},
   {"nome": "nid_pdv", "ordem": 3, "rotulo": "Stand de Vendas / PDV", "prefixo": "",
    "default": 25000, "descricao_padrao": "Projeto Stand de Vendas / PDV", "itens": [
+    {"chave": "retrofit_pdv", "descricao": "Projeto Retrofit de PDV", "preco": 0, "padroes": ["retrofit"]},
     {"chave": "stand_pdv", "descricao": "Projeto Stand de Vendas / PDV", "preco": 25000, "padroes": ["stand", "pdv", "plantao", "ponto de venda"]}]},
   {"nome": "nid_produto", "ordem": 4, "rotulo": "Desenvolvimento de Produto", "prefixo": "",
    "default": 20000, "descricao_padrao": "Desenvolvimento de Produto / Conceito + Áreas de Lazer", "itens": [
