@@ -14,19 +14,18 @@ def test_carrega_categorias_novas_com_meta_e_ordem(db):
     tabela = carregar_tabela_precos(db)  # tabela="padrao" por padrão
     nomes = list(tabela.dados.keys())
 
-    assert "filmes" in nomes
+    assert "tour_virtual" in nomes
     assert "tecnologia" in nomes
-    assert len(nomes) == 7  # as 7 categorias da Flying (estudo de fachada é da NID)
+    assert len(nomes) == 5  # a Flying faz imagem, planta, tour e tecnologia
 
     # ordem determinística conforme a coluna `ordem`
     ordens = [tabela.dados[n]["_ordem"] for n in nomes]
     assert ordens == sorted(ordens)
 
-    filmes = tabela.dados["filmes"]
-    assert filmes["_rotulo"] == "Filmes e Takes 3D"
-    assert filmes["_prefixo"] == ""
-    assert filmes["_default"] == 15000
-    assert filmes["_descricao_padrao"] == "Filme 3D — 60 segundos"
+    tour = tabela.dados["tour_virtual"]
+    assert tour["_rotulo"] == "Tour Virtual / VR 360"
+    assert tour["_prefixo"] == ""
+    assert tour["_default"] == 1200
 
     tecnologia = tabela.dados["tecnologia"]
     assert tecnologia["_rotulo"] == "Tecnologias Interativas"

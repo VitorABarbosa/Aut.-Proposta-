@@ -1,0 +1,19 @@
+{
+  "origem": "Teste real na aba Texto direto: 'vamos fazer um pacote de filme conceito, produto e viral' para a Conviver Urbanismo. Cliente, empreendimento e A/C saíram certos e o preview ficou com ZERO item — o pedido em prosa não virou item nenhum.",
+  "turnos": [
+    "vamos fazer um pacote de filme conceito, produto e viral. é para a conviver urbanismo - projeto life iguatu, enviarei para a raquel lessa"
+  ],
+  "esperado": {
+    "ferramenta": "precificar_rinno",
+    "cliente": {
+      "empresa": "conviver",
+      "ref": "iguatu",
+      "contato": "raquel"
+    },
+    "quantidade_minima": 1,
+    "sem_categorias": ["externas", "internas", "plantas"],
+    "nao_perguntar": [
+      "nao consegui identificar|quais filmes|poderia listar|nao encontrei"
+    ]
+  }
+}

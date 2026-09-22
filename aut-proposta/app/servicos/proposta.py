@@ -39,11 +39,12 @@ def parse_texto(conn: psycopg.Connection, texto: str,
                 emissor: str | None = None) -> dict[str, Any]:
     """Converte texto livre em estrutura, usando as categorias da empresa
     emissora (o `texto` não indica ainda qual das tabelas dela usar)."""
-    from app.ia.parser import parse
+    from app.ia.parser import catalogo_para_prompt, parse
 
     emp = empresa_emissora(emissor)
     tabela = carregar_tabela_precos(conn, emp.tabela_padrao)
-    estrutura = parse(texto, categorias=tabela.categorias())
+    estrutura = parse(texto, categorias=tabela.categorias(),
+                      catalogo=catalogo_para_prompt(tabela))
     estrutura["emissor"] = emp.chave
     estrutura["tabela_precos"] = emp.tabela_padrao
     return estrutura
@@ -74,13 +75,38 @@ SERVICO_POR_PADRAO: tuple[tuple[str, str], ...] = (
     (r"explorador|d\.?\s?brave", "tecnologia"),
     (r"maquete", "tecnologia"),
     (r"tour\s*virtual|vista\s*virtual|vr\s*360|360\s*vr|panos?\s*360", "tour_virtual"),
-    (r"drone|foto(grafia)?\s*a[eé]rea", "drone"),
-    (r"\bfilme\b|\btakes?\b|document[aá]rio", "filmes"),
+    # A Flying não faz filme — filme e take são da Rinno, sempre.
+    (r"\bfilmes?\b|document[aá]rio", "rinno_filmes"),
+    (r"\btakes?\b", "rinno_takes"),
     (r"stand\s*de\s*vendas|\bpdv\b|apto\s*modelo|apartamento\s*modelo", "nid_interiores"),
     # "Estudo de fachada" e "cromático" são o nome antigo do design de fachada,
     # que é serviço da NID — nunca da Flying, onde já esteve no catálogo.
     (r"design\s*de\s*fachada|estudo\s*(de)?\s*fachada|crom[aá]tico", "nid_fachada"),
 )
+
+
+# Categoria que existiu e não existe mais, e para onde o que chega nela vai.
+# O modelo aprendeu com conversas antigas e continua mandando estas chaves.
+CATEGORIAS_APOSENTADAS = {
+    # "drone e fotografia aérea" a casa chama de fotomontagem ou voo de
+    # pássaro, que são ilustrações externas.
+    "drone": "externas",
+    # Filme é da Rinno; a Flying nunca fez.
+    "filmes": "rinno_filmes",
+    "takes": "rinno_takes",
+    # "Estudo de fachada" virou design de fachada, da NID.
+    "estudos": "nid_fachada",
+}
+
+
+def sem_categorias_aposentadas(estrutura: dict[str, Any]) -> dict[str, Any]:
+    """Move o que chegou numa categoria que saiu do catálogo para a de hoje."""
+    saida = dict(estrutura)
+    for velha, nova in CATEGORIAS_APOSENTADAS.items():
+        itens = saida.pop(velha, None)
+        if isinstance(itens, list) and itens:
+            saida[nova] = [*saida.get(nova, []), *itens]
+    return saida
 
 
 def servicos_fora_das_imagens(estrutura: dict[str, Any], tabela: TabelaPrecos) -> dict[str, Any]:
@@ -220,6 +246,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             f"(tabela '{tabela_precos}' vazia) — informe os preços à mão ou rode "
             "`python -m scripts.seed_precos` com o DATABASE_URL de produção."
         )
+    estrutura = sem_categorias_aposentadas(estrutura)
     estrutura = servicos_fora_das_imagens(estrutura, tabela)
     estrutura = no_namespace_do_emissor(estrutura, emissor, tabela.categorias())
     descricoes = _descricoes(estrutura, tabela.categorias())

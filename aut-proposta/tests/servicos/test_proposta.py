@@ -33,16 +33,21 @@ def test_parse_texto_passa_categorias_do_catalogo_ao_parser(db, monkeypatch):
     _prep(db)
     recebido = {}
 
-    def _parse_fake(texto, categorias=None):
+    def _parse_fake(texto, categorias=None, catalogo=""):
         recebido["texto"] = texto
         recebido["categorias"] = categorias
+        recebido["catalogo"] = catalogo
         return {"cliente": {"empresa": "GALLI"}}
 
     monkeypatch.setattr("app.ia.parser.parse", _parse_fake)
-    out = svc.parse_texto(db, "Cliente: GALLI\nFilmes: Filme institucional")
+    out = svc.parse_texto(db, "Cliente: GALLI\nTour virtual: Render 360")
     assert out["cliente"]["empresa"] == "GALLI"
-    assert "filmes" in recebido["categorias"]
+    assert "tour_virtual" in recebido["categorias"]
     assert "tecnologia" in recebido["categorias"]
+    # O Texto direto recebe o catálogo, não só os nomes das categorias: sem
+    # saber o que cada uma vende, o pedido em prosa saía vazio.
+    assert "Tour Virtual / VR 360" in recebido["catalogo"]
+    assert "Maquete Eletrônica" in recebido["catalogo"]
 
 
 def test_levantar_planilha_precos_do_banco(db):
@@ -527,8 +532,9 @@ def test_cena_de_verdade_continua_sendo_cena(catalogo):
     ("Desenvolvimento de aplicação web para tela touch", "tecnologia"),
     ("Explorador D.Brave", "tecnologia"),
     ("Estudo de fachada", "nid_fachada"),   # nome antigo do design de fachada
-    ("Fotografia aérea com drone", "drone"),
-    ("Filme institucional", "filmes"),
+    # Drone/aérea é fotomontagem, que é ilustração externa — fica onde está.
+    ("Filme institucional", "rinno_filmes"),   # a Flying não faz filme
+    ("Take animado de 7 segundos", "rinno_takes"),
 ])
 def test_cada_servico_sai_das_imagens_para_a_categoria_dele(catalogo, descricao, categoria):
     orc = _levantar(catalogo, internas=[descricao])["fechado"]["orcamento"]
