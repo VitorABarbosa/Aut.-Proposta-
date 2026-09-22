@@ -402,9 +402,16 @@ def test_total_fechado_vence_o_desconto_percentual(cliente_api):
     assert fin["total"] == 24000             # e não 12.500
 
 
-def test_total_fechado_acima_da_soma_explica_o_que_fazer(cliente_api):
+def test_total_fechado_acima_da_soma_vale_com_aviso(cliente_api):
+    """Fechar acima da soma é negociação, não erro. Como erro, a IA recebia a
+    recusa e refazia a chamada com a estrutura mutilada — foi assim que a
+    proposta da Tavares e Rosseti perdeu 30 imagens e o tour."""
     estrutura = {"cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
                  "tecnologia": ["Maquete eletrônica"], "total_fechado": 90000}
-    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
-    assert r.status_code == 422
-    assert "maior que a soma dos itens" in r.json()["detail"]
+    corpo = cliente_api.post("/levantamento", json={"estrutura": estrutura},
+                             headers=HEAD).json()
+    fin = corpo["fechado"]["financeiro"]
+    assert fin["subtotal"] == 25000
+    assert fin["total"] == 90000
+    assert fin["desconto_valor"] == 0      # nada a mostrar: o valor sai limpo
+    assert any("acima da soma dos itens" in a for a in corpo["avisos"])

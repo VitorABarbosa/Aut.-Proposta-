@@ -625,3 +625,61 @@ def test_prompt_manda_uma_chamada_por_resposta_e_quantidade_sem_descricao():
     assert "UMA chamada por resposta" in prompt
     assert "QUANTIDADE SEM DESCRIÇÃO CONTINUA SENDO ITEM" in prompt
     assert 'NUNCA responda "não consegui identificar as 30 imagens"' in prompt
+
+
+def test_chamada_que_encolhe_depois_de_erro_nao_substitui_o_preview(db, monkeypatch):
+    """O teste da Tavares e Rosseti: a primeira chamada tinha 30 imagens, a
+    maquete e o tour de 7 áreas. A ferramenta recusou o valor fechado, a IA
+    "tentou de novo" com um item só, e o preview ficou com esse um item."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    cliente = {"empresa": "Tavares e Rosseti", "ref": "Fernando de Noronha",
+               "contato": "Luis"}
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
+            "cliente": cliente,
+            "externas": ["A definir"] * 30,
+            "tecnologia": [{"descricao": "Maquete eletrônica", "preco": 20000}],
+            "tour_virtual": ["Elaboração 3d", "Render 360 VR", "Versão mobile"],
+            "ambientes": 7}}, id_="a")]),
+        _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
+            "cliente": cliente,
+            "externas": [{"descricao": "Maquete eletrônica", "preco": 20000}]}},
+            id_="b")]),
+        _msg(content="Pronto."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+
+    out = chat.responder(db, [{"role": "user", "content": "..."}])
+    orc = out["levantamento"]["fechado"]["orcamento"]
+    assert orc["total_imagens"] == 34, "a chamada encolhida substituiu o preview"
+    assert orc["externas"]["qtd"] == 30
+    assert orc["tecnologia"]["itens"][0]["preco"] == 20000
+    assert out["levantamento"]["estrutura"]["ambientes"] == 7
+
+
+def test_correcao_que_tira_itens_continua_valendo(db, monkeypatch):
+    """"tira as plantas" encolhe a lista de propósito — mas numa rodada com uma
+    chamada só, que é como a correção do usuário chega."""
+    aplicar_schema(db)
+    semear_precos(db)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    respostas = [
+        _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
+            "cliente": {"empresa": "GALLI", "ref": "Aurora", "contato": "Daniel"},
+            "externas": ["Fachada"]}})]),
+        _msg(content="Tirei as plantas."),
+    ]
+    monkeypatch.setattr(chat, "_chamar_modelo", lambda m, t: respostas.pop(0))
+    out = chat.responder(db, [{"role": "user", "content": "tira as plantas"}])
+    assert out["levantamento"]["fechado"]["orcamento"]["total_imagens"] == 1
+
+
+def test_prompt_separa_preco_de_item_de_preco_por_imagem():
+    """"a maquete a gente fez por 20 mil" virou preco_por_imagem = 20000 e
+    contaminou todas as cenas da proposta."""
+    prompt = chat.SYSTEM_PROMPT
+    assert 'CUIDADO: "a maquete a gente fez por 20 mil" é o preço DAQUELE item' in prompt
+    assert "SERVIÇO COM NOME PRÓPRIO NUNCA É ILUSTRAÇÃO" in prompt
+    assert "NÃO\n  chame a ferramenta de novo com menos coisas" in prompt

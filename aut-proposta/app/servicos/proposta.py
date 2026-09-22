@@ -5,6 +5,7 @@ de produção que monta TabelaPrecos — sempre via carregar_tabela_precos(conn)
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from app.dominio.orcamento import (
     CategoriaOrcada,
     ItemOrcado,
     Orcamento,
+    e_categoria_de_imagem,
     e_categoria_por_ambiente,
     entrada_de_item,
     fechar_orcamento,
@@ -54,6 +56,86 @@ def _slug(texto: str) -> str:
 
 def _descricoes(estrutura: dict[str, Any], categorias: list[str]) -> dict[str, list[str]]:
     return {cat: estrutura.get(cat, []) for cat in categorias}
+
+
+# Serviço com nome próprio -> categoria a que ele pertence, aconteça o que
+# acontecer com o palpite do modelo.
+#
+# A IA insiste em jogar serviço dentro de ilustrações: a maquete eletrônica já
+# saiu três vezes como "Perspectiva Maquete eletrônica" a R$ 1.900, que é o
+# preço de uma cena qualquer. Prompt não segurou, então a regra é de código.
+# Ilustração externa/interna é CENA do empreendimento ("fachada noturna",
+# "piscina"); nome de serviço nunca é cena.
+#
+# A ordem importa: o padrão mais específico ganha, e por isso "aplicação web"
+# vem antes de qualquer coisa que case com "web".
+SERVICO_POR_PADRAO: tuple[tuple[str, str], ...] = (
+    (r"aplica[cç][aã]o\s*web|aplicativo\s*web|tela\s*touch|touch\s*screen", "tecnologia"),
+    (r"explorador|d\.?\s?brave", "tecnologia"),
+    (r"maquete", "tecnologia"),
+    (r"tour\s*virtual|vista\s*virtual|vr\s*360|360\s*vr|panos?\s*360", "tour_virtual"),
+    (r"estudo\s*(de)?\s*fachada|crom[aá]tico", "estudos"),
+    (r"drone|foto(grafia)?\s*a[eé]rea", "drone"),
+    (r"\bfilme\b|\btakes?\b|document[aá]rio", "filmes"),
+    (r"stand\s*de\s*vendas|\bpdv\b|apto\s*modelo|apartamento\s*modelo", "nid_interiores"),
+    (r"design\s*de\s*fachada", "nid_fachada"),
+)
+
+
+def servicos_fora_das_imagens(estrutura: dict[str, Any], tabela: TabelaPrecos) -> dict[str, Any]:
+    """Tira de ilustrações os itens que são serviço, e põe na categoria deles.
+
+    Roda ANTES do namespace do emissor, para que um filme mandado como
+    `filmes` numa proposta da Rinno ainda vire `rinno_filmes` depois.
+
+    Serviço cuja categoria não existe na tabela carregada sai das imagens do
+    mesmo jeito: vai para a categoria certa e cai em "fora da tabela", que
+    pede o preço. Melhor sem preço do que cobrado como se fosse uma cena.
+    """
+    saida = dict(estrutura)
+    for cat in list(estrutura):
+        if not isinstance(estrutura[cat], list) or not _e_de_imagem(cat, tabela):
+            continue
+        ficam, movidos = [], []
+        for entrada in estrutura[cat]:
+            desc, _ = entrada_de_item(entrada)
+            alvo = _categoria_de_servico(desc)
+            if alvo is None or alvo == cat:
+                ficam.append(entrada)
+            else:
+                movidos.append((alvo, entrada))
+        if not movidos:
+            continue
+        saida[cat] = ficam
+        for alvo, entrada in movidos:
+            saida[alvo] = [*saida.get(alvo, []), entrada]
+    return saida
+
+
+# Nomes das categorias de imagem do grupo. A tabela carregada resolve o caso
+# normal (categoria com prefixo de escrita), mas a proposta da Rinno não tem
+# `externas` na tabela dela — e é justamente ali que o modelo larga um filme.
+NOMES_DE_IMAGEM = ("externas", "internas", "plantas")
+
+
+def _e_de_imagem(cat: str, tabela: TabelaPrecos) -> bool:
+    if cat.startswith("_") or cat == "cliente":
+        return False
+    if cat in tabela.categorias():
+        return e_categoria_de_imagem(cat, tabela)
+    nome = cat
+    for emissor in EMISSORES:
+        if nome.startswith(f"{emissor}_"):
+            nome = nome[len(emissor) + 1:]
+    return nome in NOMES_DE_IMAGEM
+
+
+def _categoria_de_servico(descricao: str) -> str | None:
+    alvo = normalizar(descricao)
+    for padrao, categoria in SERVICO_POR_PADRAO:
+        if re.search(padrao, alvo):
+            return categoria
+    return None
 
 
 def no_namespace_do_emissor(estrutura: dict[str, Any], emissor: str,
@@ -129,6 +211,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             f"(tabela '{tabela_precos}' vazia) — informe os preços à mão ou rode "
             "`python -m scripts.seed_precos` com o DATABASE_URL de produção."
         )
+    estrutura = servicos_fora_das_imagens(estrutura, tabela)
     estrutura = no_namespace_do_emissor(estrutura, emissor, tabela.categorias())
     descricoes = _descricoes(estrutura, tabela.categorias())
 
@@ -193,15 +276,19 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
     total_fechado = _inteiro_ou_none(estrutura.get("total_fechado"))
     rotulo = estrutura.get("desconto_label") or ""
     desconto = None
+    acima_da_soma = False
     if total_fechado is not None:
         subtotal = orc.subtotal
         if total_fechado > subtotal:
-            raise ValueError(
-                f"O valor fechado (R$ {total_fechado:,}) é maior que a soma dos itens "
-                f"(R$ {subtotal:,}). Suba o preço de um item ou use o ajuste de planilha — "
-                "o total fechado só desconta.".replace(",", ".")
-            )
-        desconto = Desconto(tipo="valor", valor=float(subtotal - total_fechado), rotulo=rotulo)
+            # Fechar acima da soma é negociação legítima, não erro: o número que
+            # o cliente lê é o negociado. Antes isto levantava ValueError, e a
+            # IA, ao receber o erro, refazia a chamada com a estrutura
+            # mutilada — foi assim que a proposta da Tavares e Rosseti perdeu
+            # as 30 imagens e o tour. Vale o número, com aviso.
+            acima_da_soma = True
+        else:
+            desconto = Desconto(tipo="valor", valor=float(subtotal - total_fechado),
+                                rotulo=rotulo)
     elif estrutura.get("desconto_pct", 0):
         desconto = Desconto(
             tipo="percentual",
@@ -214,12 +301,30 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         # A estrutura já no namespace do emissor: quem devolve ao front tem de
         # usar esta, senão o preview lista `rinno_filmes` sem achar os itens.
         "estrutura": estrutura,
-        "fechado": fechar_orcamento(orc, desconto),
+        "fechado": _fechar(orc, desconto, total_fechado if acima_da_soma else None, avisos),
         "estrategia_usada": orc.estrategia,
         "emissor": emissor,
         "tabela_precos": tabela_precos,
         "avisos": avisos,
     }
+
+
+def _fechar(orc: Orcamento, desconto: "Desconto | None", total_acima: int | None,
+            avisos: list[str]) -> dict[str, Any]:
+    """Fecha o orçamento, respeitando um total negociado acima da soma dos itens.
+
+    Sem desconto a mostrar, a proposta sai com o valor fechado limpo — que é
+    como ela já imprime qualquer total sem desconto.
+    """
+    fechado = fechar_orcamento(orc, desconto)
+    if total_acima is not None:
+        avisos.append(
+            f"O valor fechado (R$ {total_acima:,}) está acima da soma dos itens "
+            f"(R$ {orc.subtotal:,}) — vale o valor fechado.".replace(",", ".")
+        )
+        fechado["financeiro"] = {**fechado["financeiro"], "total": float(total_acima),
+                                 "desconto_pct": 0.0, "desconto_valor": 0.0}
+    return fechado
 
 
 def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) -> dict[str, Any]:
