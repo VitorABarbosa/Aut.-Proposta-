@@ -488,3 +488,74 @@ def test_categoria_fora_da_tabela_entra_com_o_preco_informado(db):
     tec = out["fechado"]["orcamento"]["tecnologia"]
     assert tec["total"] == 20000 and tec["itens"][0]["fonte"] == "informado"
     assert {"nome": "tecnologia", "rotulo": "Tecnologia"} in out["fechado"]["orcamento"]["_categorias"]
+
+
+# ---------- serviço nunca é ilustração ----------
+
+
+@pytest.fixture
+def catalogo(db):
+    aplicar_schema(db)
+    semear_precos(db)
+    return db
+
+
+def _levantar(db, **campos):
+    base = {"cliente": {"empresa": "Construlike", "ref": "Morumbi", "contato": "Alan Maciel"},
+            "emissor": "flying", "tabela_precos": "padrao"}
+    return svc.levantar(db, {**base, **campos})
+
+
+def test_maquete_mandada_como_ilustracao_vai_para_tecnologia(catalogo):
+    """Saiu três vezes como "Perspectiva Maquete eletrônica" a R$ 1.900, que é
+    o preço de uma cena qualquer. Maquete é serviço, e custa R$ 25.000."""
+    orc = _levantar(catalogo, externas=["Maquete eletrônica"])["fechado"]["orcamento"]
+    assert orc["externas"]["qtd"] == 0
+    assert orc["tecnologia"]["itens"][0]["descricao"] == "Maquete Eletrônica"
+    assert orc["tecnologia"]["total"] == 25000
+
+
+def test_cena_de_verdade_continua_sendo_cena(catalogo):
+    orc = _levantar(catalogo, externas=["Fachada noturna", "Piscina"])["fechado"]["orcamento"]
+    assert orc["externas"]["qtd"] == 2
+    assert orc["tecnologia"]["qtd"] == 0
+
+
+@pytest.mark.parametrize("descricao,categoria", [
+    ("Tour virtual das áreas comuns", "tour_virtual"),
+    ("Vista virtual web multiplataforma", "tour_virtual"),
+    ("Desenvolvimento de aplicação web para tela touch", "tecnologia"),
+    ("Explorador D.Brave", "tecnologia"),
+    ("Estudo de fachada", "estudos"),
+    ("Fotografia aérea com drone", "drone"),
+    ("Filme institucional", "filmes"),
+])
+def test_cada_servico_sai_das_imagens_para_a_categoria_dele(catalogo, descricao, categoria):
+    orc = _levantar(catalogo, internas=[descricao])["fechado"]["orcamento"]
+    assert orc["internas"]["qtd"] == 0, descricao
+    assert orc[categoria]["qtd"] == 1, descricao
+
+
+def test_aplicacao_web_nao_vira_tour_so_por_ter_a_palavra_web(catalogo):
+    """O padrão do tour casa "web" (Web/Mobile/PC). Mais específico ganha."""
+    orc = _levantar(catalogo, externas=["Aplicação web para tela touch"])["fechado"]["orcamento"]
+    assert orc["tecnologia"]["qtd"] == 1
+    assert orc["tour_virtual"]["qtd"] == 0
+
+
+def test_preco_fechado_do_item_sobrevive_a_mudanca_de_categoria(catalogo):
+    orc = _levantar(catalogo, externas=[{"descricao": "Maquete eletrônica", "preco": 20000}]
+                    )["fechado"]["orcamento"]
+    item = orc["tecnologia"]["itens"][0]
+    assert (item["preco"], item["fonte"]) == (20000, "informado")
+
+
+def test_servico_da_rinno_mandado_como_imagem_chega_em_rinno_filmes(catalogo):
+    """Sai das imagens primeiro, e o namespace do emissor ainda se aplica."""
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "OUSY", "ref": "Vila Mariana", "contato": "Yuri"},
+        "emissor": "rinno", "tabela_precos": "rinno",
+        "externas": ["Filme conceito"]})
+    orc = lev["fechado"]["orcamento"]
+    assert orc["rinno_filmes"]["qtd"] == 1
+    assert orc.get("externas", {"qtd": 0})["qtd"] == 0
