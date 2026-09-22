@@ -27,6 +27,7 @@ from app.docx.base import (
     bloco_pagamento,
     cabecalho_proposta,
     itens_orcados,
+    valor_do_item,
 )
 from app.docx.formatos import brl
 from app.dominio.texto import normalizar
@@ -225,7 +226,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
             # O valor de cada item sai SEMPRE. A proposta que só mostra o
             # total da categoria obriga o cliente a perguntar quanto custa
             # cada filme — e a resposta some do documento enviado.
-            _subtitulo(doc, f"2.{sub} {artigo}{desc} — {brl(item['preco'])}")
+            _subtitulo(doc, f"2.{sub} {artigo}{desc} — {valor_do_item(item['preco'])}")
             escopo = _escopo_de(desc)
             # "Este item inclui:" só quando há lista; o viral tem uma linha só
             # ("Conteúdo: …") e no modelo ela vem direto.

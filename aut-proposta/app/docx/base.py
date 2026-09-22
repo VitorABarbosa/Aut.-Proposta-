@@ -217,6 +217,15 @@ def assinatura(doc, data: dt.date) -> None:
     _run(p, "_" * 60)
 
 
+def valor_do_item(preco: int) -> str:
+    """Como o valor de um item sai na proposta.
+
+    Serviço sem preço de tabela entra com zero e o valor é combinado depois —
+    e "R$0,00" numa proposta enviada é pior do que não dizer nada.
+    """
+    return brl(preco) if preco else "a definir"
+
+
 def itens_orcados(orc: dict) -> list[tuple[str, str, dict]]:
     """Categorias com item, na ordem do catálogo: (nome, rótulo, bloco)."""
     meta = orc.get("_categorias") or []

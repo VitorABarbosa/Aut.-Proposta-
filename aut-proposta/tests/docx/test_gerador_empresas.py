@@ -357,3 +357,13 @@ def test_desconto_sai_como_desconto_especial_nas_tres(tmp_path, emissor):
     assert "Valor total = R$ 60.000,00" in texto
     assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
     assert "Valor bruto" not in texto
+
+
+def test_item_sem_preco_sai_como_a_definir_e_nao_como_zero(tmp_path):
+    """"R$0,00" numa proposta enviada é pior do que não dizer nada."""
+    fechado = _fechado([("tecnologia", "Tecnologias Interativas", [
+        ("Maquete Eletrônica", 25000), ("Projeto Executivo Arquitetônico", 0)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
+    assert "Maquete Eletrônica — R$25.000,00" in texto
+    assert "Projeto Executivo Arquitetônico — a definir" in texto
+    assert "R$0,00" not in texto

@@ -26,6 +26,7 @@ from app.docx.base import (
     bloco_pagamento,
     cabecalho_proposta,
     itens_orcados,
+    valor_do_item,
 )
 from app.docx.formatos import brl
 from app.dominio.orcamento import e_categoria_por_ambiente
@@ -266,7 +267,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
         _subtitulo(doc, f"2.{sub} {titulo}")
         for idx, item in enumerate(bloco["itens"], start=1):
             p = _par(doc, depois=2, recuo=1.25)
-            _run(p, f"{idx}. {item['descricao']} — {brl(item['preco'])}")
+            _run(p, f"{idx}. {item['descricao']} — {valor_do_item(item['preco'])}")
             for linha in _escopo_de(item["descricao"]):
                 sub_p = _par(doc, depois=0, recuo=2.0)
                 _run(sub_p, f"– {linha}")
