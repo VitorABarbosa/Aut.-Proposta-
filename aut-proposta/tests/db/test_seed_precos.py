@@ -10,8 +10,8 @@ def test_seed_popula_categorias_e_itens_das_quatro_tabelas(db):
     aplicar_schema(db)
     contagens = semear_precos(db)
 
-    # 5 (padrao) + 4 (mcmv) da Flying, 3 da Rinno e 5 da NID.
-    assert contagens["categorias"] == 17
+    # 5 (padrao) + 4 (mcmv) da Flying, 3 da Rinno e 6 da NID.
+    assert contagens["categorias"] == 18
     assert contagens["itens"] >= 15  # ao menos uma linha por categoria
 
     with db.cursor() as cur:
@@ -22,7 +22,7 @@ def test_seed_popula_categorias_e_itens_das_quatro_tabelas(db):
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'rinno'")
         assert cur.fetchone()[0] == 3
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'nid'")
-        assert cur.fetchone()[0] == 5
+        assert cur.fetchone()[0] == 6
 
         # A categoria 'externas' padrão deve conter a linha de fachada a 3000.
         cur.execute(

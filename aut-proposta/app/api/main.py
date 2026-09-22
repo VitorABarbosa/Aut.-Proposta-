@@ -141,14 +141,6 @@ def _pendencias(estrutura: dict, fechado: dict) -> list[str]:
             for cat, bloco in fechado["orcamento"].items() if isinstance(bloco, dict)):
         pend.append("Informe quantas áreas/ambientes o empreendimento tem — "
                     "o tour virtual é cobrado por ambiente.")
-    # Item que a tabela não cobre (ou tabela vazia) entra com zero: a pessoa
-    # informa o valor — no chat ("por 4 mil") ou clicando no preço no preview.
-    for cat, bloco in fechado["orcamento"].items():
-        if cat.startswith("_") or not isinstance(bloco, dict) or "itens" not in bloco:
-            continue
-        for item in bloco["itens"]:
-            if item.get("fonte") == "sem_tabela":
-                pend.append(f"'{item['descricao']}' está sem preço — informe o valor.")
     return pend
 
 

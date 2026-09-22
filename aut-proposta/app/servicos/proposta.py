@@ -79,6 +79,7 @@ SERVICO_POR_PADRAO: tuple[tuple[str, str], ...] = (
     (r"\bfilmes?\b|document[aá]rio", "rinno_filmes"),
     (r"\btakes?\b", "rinno_takes"),
     (r"stand\s*de\s*vendas|\bpdv\b|apto\s*modelo|apartamento\s*modelo", "nid_interiores"),
+    (r"projeto\s*executivo|arquitet[oô]nico|paisagismo", "nid_arquitetura"),
     # "Estudo de fachada" e "cromático" são o nome antigo do design de fachada,
     # que é serviço da NID — nunca da Flying, onde já esteve no catálogo.
     (r"design\s*de\s*fachada|estudo\s*(de)?\s*fachada|crom[aá]tico", "nid_fachada"),
@@ -298,6 +299,7 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
 
     cliente = estrutura["cliente"]["empresa"]
     pedida = estrutura.get("estrategia", "auto")
+    sem_preco: list[str] = []
 
     historico = Historico(conn)
     orc = None
@@ -312,6 +314,18 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
                                   ambientes=ambientes or 1)
     orc.ambientes = max(1, ambientes or 1)
     _acrescentar_fora_da_tabela(orc, fora_da_tabela)
+
+    # Serviço sem preço não trava a proposta: entra com zero e o aviso lembra
+    # de pôr o valor à mão. Era pendência, e pendência impede de gerar.
+    sem_preco = [i.descricao_normalizada for cat in orc.categorias.values()
+                 for i in cat.itens
+                 if i.preco == 0 and i.fonte.startswith(("a_definir", "sem_tabela"))]
+    if sem_preco:
+        avisos.append(
+            f"Sem preço de tabela ({len(sem_preco)}): {', '.join(sem_preco[:4])}"
+            f"{'…' if len(sem_preco) > 4 else ''}. Clique no preço de cada um no "
+            "preview para informar o valor — dá para gerar assim mesmo."
+        )
 
     # Valor fechado da proposta: "fechamos por 100 mil". A tabela é base, e o
     # número que o cliente vê é o que foi negociado — então o total pode ser
