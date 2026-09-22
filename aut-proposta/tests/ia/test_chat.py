@@ -683,3 +683,9 @@ def test_prompt_separa_preco_de_item_de_preco_por_imagem():
     assert 'CUIDADO: "a maquete a gente fez por 20 mil" é o preço DAQUELE item' in prompt
     assert "SERVIÇO COM NOME PRÓPRIO NUNCA É ILUSTRAÇÃO" in prompt
     assert "NÃO\n  chame a ferramenta de novo com menos coisas" in prompt
+
+
+def test_prompt_trata_pedido_especifico_como_normal():
+    prompt = chat.SYSTEM_PROMPT
+    assert "PEDIDO ESPECÍFICO É NORMAL" in prompt
+    assert "COM O TEXTO EXATO que a pessoa escreveu" in prompt

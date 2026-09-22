@@ -637,3 +637,44 @@ def test_escopo_inteiro_da_tavares_e_rosseti_passa(catalogo):
                                        "nid_arquitetura")) == 8
     assert lev["fechado"]["financeiro"]["total"] == 24500.0
     assert _pendencias(lev["estrutura"], lev["fechado"]) == []
+
+
+def test_pedido_especifico_entra_com_o_texto_de_quem_pediu_e_sem_preco(catalogo):
+    """Casa Viva / Bruna: "Desenvolvimento do Ant. Projeto de 3 Decorados
+    (Tipo B, C e D)" não existe no catálogo. Saía a R$ 2.500 — o preço de
+    área comum por ambiente — com cara de tabela."""
+    from app.api.main import _pendencias
+
+    itens = ["Desenvolvimento do Ant. Projeto de 3 Decorados (Tipo B, C e D)",
+             "Projeto de 4 modelos 3d (Tipo A, B, C e D)"]
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "Casa Viva", "ref": "—", "contato": "Bruna"},
+        "emissor": "nid", "tabela_precos": "nid", "nid_interiores": itens})
+    orcados = lev["fechado"]["orcamento"]["nid_interiores"]["itens"]
+
+    # O texto é o de quem pediu, não o nome do serviço mais parecido.
+    assert [i["descricao"] for i in orcados] == itens
+    assert all(i["preco"] == 0 and i["fonte"] == "a_definir:default" for i in orcados)
+    assert _pendencias(lev["estrutura"], lev["fechado"]) == []
+
+
+def test_o_valor_validado_depois_manda_no_pedido_especifico(catalogo):
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "Casa Viva", "ref": "—", "contato": "Bruna"},
+        "emissor": "nid", "tabela_precos": "nid",
+        "nid_interiores": [
+            {"descricao": "Desenvolvimento do Ant. Projeto de 3 Decorados", "preco": 18000},
+            {"descricao": "Projeto de 4 modelos 3d", "preco": 12000}]})
+    assert lev["fechado"]["financeiro"]["total"] == 30000.0
+    assert not any("Sem preço de tabela" in a for a in lev["avisos"])
+
+
+def test_cena_desconhecida_continua_com_o_preco_da_categoria(catalogo):
+    """Imagem é outra história: uma cena é uma cena, e todas custam o mesmo —
+    o default da categoria vale."""
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "X", "ref": "Y", "contato": "Z"},
+        "emissor": "flying", "tabela_precos": "padrao",
+        "externas": ["Vista do mirante ao entardecer"]})
+    item = lev["fechado"]["orcamento"]["externas"]["itens"][0]
+    assert item["preco"] == 1900 and item["fonte"] == "planilha:default"
