@@ -289,3 +289,17 @@ def test_nid_tambem_mostra_o_valor_de_cada_item(tmp_path):
     fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 22000)])])
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
     assert "Design de Fachada — R$22.000,00" in texto
+
+
+def test_dsbrave_sai_com_os_sete_modulos(tmp_path):
+    """Flying_Dsbrave_Ousy_AnexoI_R00: o D.sbrave é plataforma, e o escopo são
+    os módulos dela."""
+    fechado = _fechado([("tecnologia", "Tecnologias Interativas", [
+        ("D.sbrave — Apartamento Modelo Virtual", 69000)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "d.docx", DATA, emissor="flying"))
+    for modulo in ("Visita Virtual do Apto", "Visita Virtual Áreas de Lazer",
+                   "Simulação de Insolação", "Maquete Eletrônica Virtual",
+                   "Revista Digital", "Split.View / Acompanhamento de Obra",
+                   "Espelho de Vendas (integração com CV)"):
+        assert modulo in texto, modulo
+    assert "D.sbrave — Apartamento Modelo Virtual — R$69.000,00" in texto

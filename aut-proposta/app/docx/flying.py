@@ -58,6 +58,18 @@ ESCOPO_POR_ITEM: dict[str, list[str]] = {
         "Render 360° VR",
         "Versão Mobile Offline – Panos 360º",
     ],
+    # Flying_Dsbrave_Ousy_AnexoI_R00: o D.sbrave é uma plataforma, e o escopo
+    # são os módulos dela. Na proposta da Ousy saiu fechado em R$ 69.000; na da
+    # Elecon só a parte de apartamento modelo virtual, por ambiente.
+    "d.sbrave": [
+        "Visita Virtual do Apto",
+        "Visita Virtual Áreas de Lazer",
+        "Simulação de Insolação",
+        "Maquete Eletrônica Virtual",
+        "Revista Digital",
+        "Split.View / Acompanhamento de Obra",
+        "Espelho de Vendas (integração com CV)",
+    ],
     "maquete eletronica": [
         "Simulação de Insolação",
         "360° View",
