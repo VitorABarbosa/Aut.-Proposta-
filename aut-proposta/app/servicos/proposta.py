@@ -387,13 +387,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     )
 
     docx_path = Path(dir_saida) / f"proposta_{proposta_id}.docx"
-    gerar_docx(
-        cliente,
-        fechado,
-        docx_path,
-        emissor=lev["emissor"],
-        mostra_precos_individuais=bool(estrutura.get("mostrar_precos_individuais")),
-    )
+    gerar_docx(cliente, fechado, docx_path, emissor=lev["emissor"])
 
     # Emissor no caminho: o mesmo cliente/ref pode ter proposta das três
     # empresas, e no R2 elas ficam separadas por pasta.

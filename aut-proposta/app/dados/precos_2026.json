@@ -49,10 +49,10 @@
  "rinno": {"categorias": [
   {"nome": "rinno_filmes", "ordem": 1, "rotulo": "Filmes", "prefixo": "",
    "default": 14000, "descricao_padrao": "Filme Conceito de até 2:30 (Dois Minutos e Meio)", "itens": [
-    {"chave": "filme_conceito", "descricao": "Filme Conceito de até 2:30 (Dois Minutos e Meio)", "preco": 14000, "padroes": ["conceito"]},
+    {"chave": "filme_conceito", "descricao": "Filme Conceito de até 2:30 (Dois Minutos e Meio)", "preco": 19000, "padroes": ["conceito"]},
     {"chave": "filme_institucional", "descricao": "Filme Institucional de até 3:30 (Três Minutos e Meio)", "preco": 18000, "padroes": ["institucional"]},
-    {"chave": "filme_produto", "descricao": "Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)", "preco": 10000, "padroes": ["produto", "corretor"]},
-    {"chave": "filme_viral", "descricao": "Filme Viral de até 1:00 (Um Minuto) — formato 9:16", "preco": 3900, "padroes": ["viral", "9:16", "rede social", "redes sociais"]},
+    {"chave": "filme_produto", "descricao": "Filme Corretor / Produto de até 1:30 (Um Minuto e Meio)", "preco": 14000, "padroes": ["produto", "corretor"]},
+    {"chave": "filme_viral", "descricao": "Filme Viral de até 1:00 (Um Minuto) — formato 9:16", "preco": 4000, "padroes": ["viral", "9:16", "rede social", "redes sociais"]},
     {"chave": "filme_doc", "descricao": "Filme Documentário de até 1:00 por episódio — valor por episódio", "preco": 5900, "padroes": ["documentario", "\\bdoc\\b", "episodio"]},
     {"chave": "filme_3d_animado", "descricao": "Filme 3D Animado de 60 segundos", "preco": 18000, "padroes": ["3d", "animado"]}]},
   {"nome": "rinno_takes", "ordem": 2, "rotulo": "Takes Animados", "prefixo": "",

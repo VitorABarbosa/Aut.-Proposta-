@@ -305,7 +305,7 @@ def test_levantamento_devolve_o_emissor(cliente_api):
     assert r.status_code == 200
     corpo = r.json()
     assert corpo["emissor"] == "rinno"
-    assert corpo["fechado"]["financeiro"]["total"] == 14000.0
+    assert corpo["fechado"]["financeiro"]["total"] == 19000.0
 
 
 def test_texto_direto_aceita_a_empresa_no_corpo(cliente_api):

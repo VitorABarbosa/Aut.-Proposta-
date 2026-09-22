@@ -230,9 +230,9 @@ def test_levantar_da_rinno_usa_a_tabela_da_rinno(db):
 
     assert out["emissor"] == "rinno" and out["tabela_precos"] == "rinno"
     orc = out["fechado"]["orcamento"]
-    assert orc["rinno_filmes"]["total"] == 24000   # conceito 14000 + produto 10000
+    assert orc["rinno_filmes"]["total"] == 33000   # conceito 19000 + produto 14000
     assert orc["rinno_takes"]["total"] == 650
-    assert out["fechado"]["financeiro"]["total"] == 24650.0
+    assert out["fechado"]["financeiro"]["total"] == 33650.0
 
 
 def test_item_de_servico_sai_com_o_nome_do_catalogo(db):
@@ -421,8 +421,8 @@ def test_item_com_preco_fechado_usa_o_valor_dito(db):
     itens = out["fechado"]["orcamento"]["rinno_filmes"]["itens"]
     assert itens[0]["descricao"] == "Filme institucional de até 2:00"
     assert itens[0]["preco"] == 15000 and itens[0]["fonte"] == "informado"
-    assert itens[1]["preco"] == 10000 and itens[1]["fonte"] == "planilha:filme_produto"
-    assert out["fechado"]["financeiro"]["total"] == 25000.0
+    assert itens[1]["preco"] == 14000 and itens[1]["fonte"] == "planilha:filme_produto"
+    assert out["fechado"]["financeiro"]["total"] == 29000.0
 
 
 def test_preco_informado_ganha_do_preco_por_imagem_e_do_ajuste(db):

@@ -221,7 +221,7 @@ PARCELAS_PAGAMENTO = (
 
 
 def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, Any],
-             data: dt.date, mostra_precos_individuais: bool = False) -> None:
+             data: dt.date) -> None:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
     ambientes = int(orc.get("ambientes") or 1)
@@ -254,10 +254,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
         _subtitulo(doc, f"2.{sub} {titulo}")
         for idx, item in enumerate(bloco["itens"], start=1):
             p = _par(doc, depois=2, recuo=1.25)
-            texto = f"{idx}. {item['descricao']}"
-            if mostra_precos_individuais:
-                texto += f" — {brl(item['preco'])}"
-            _run(p, texto)
+            _run(p, f"{idx}. {item['descricao']} — {brl(item['preco'])}")
             for linha in _escopo_de(item["descricao"]):
                 sub_p = _par(doc, depois=0, recuo=2.0)
                 _run(sub_p, f"– {linha}")

@@ -24,7 +24,7 @@ def test_migracao_e_idempotente_rodando_2x(db):
 
     # As tabelas das outras duas empresas chegam pelo mesmo caminho.
     rinno = carregar_tabela_precos(db, "rinno")
-    assert rinno.classificar("filme conceito", "rinno_filmes")["preco"] == 14000
+    assert rinno.classificar("filme conceito", "rinno_filmes")["preco"] == 19000
     nid = carregar_tabela_precos(db, "nid")
     assert nid.classificar("design de fachada", "nid_fachada")["preco"] == 22000
 
