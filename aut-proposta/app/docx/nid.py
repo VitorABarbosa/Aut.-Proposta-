@@ -27,11 +27,12 @@ from app.docx.base import (
     _subtitulo,
     _titulo_secao,
     assinatura,
+    bloco_investimento,
     bloco_pagamento,
     cabecalho_proposta,
     itens_orcados,
 )
-from app.docx.formatos import brl, extenso
+from app.docx.formatos import brl
 from app.empresas import Empresa
 
 HORA_TECNICA = 600.0
@@ -212,26 +213,6 @@ PARCELAS_PAGAMENTO = (
 )
 
 
-def _investimento_nid(doc, numero: str, fin: dict) -> None:
-    """Investimento na redação da NID.
-
-    As propostas dela não mostram "valor bruto · desconto": escrevem duas
-    linhas, "Valor total = X" e "Valor total com desconto especial de N% = Y
-    (por extenso)". Sem desconto, sai só o valor com o extenso, como na
-    Di Biase/Valença.
-    """
-    _subtitulo(doc, f"{numero} INVESTIMENTO:")
-    if fin["desconto_pct"] > 0:
-        p = _par(doc, depois=2, recuo=1.25)
-        _run(p, f"Valor total = {brl(fin['subtotal']).replace('R$', 'R$ ')}")
-        p = _par(doc, depois=8, recuo=1.25)
-        _run(p, f"Valor total com desconto especial de {fin['desconto_pct']:g}% = "
-                f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
-    else:
-        p = _par(doc, depois=8, recuo=1.25)
-        _run(p, f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
-
-
 def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, Any],
              data: dt.date) -> None:
     orc = fechado["orcamento"]
@@ -280,7 +261,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
 
     # ===== 5 – Investimento, pagamento e serviços adicionais =====
     _titulo_secao(doc, "5", "INVESTIMENTOS E FORMA DE PAGAMENTO")
-    _investimento_nid(doc, "5.1", fin)
+    bloco_investimento(doc, "5.1", fin, titulo="INVESTIMENTO:")
     bloco_pagamento(doc, "5.2", fin, PARCELAS_PAGAMENTO)
 
     _subtitulo(doc, "5.3 SERVIÇOS ADICIONAIS (ACOMPANHAMENTO E GESTÃO):")

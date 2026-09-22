@@ -332,7 +332,7 @@ def test_nid_escreve_o_desconto_como_desconto_especial(tmp_path):
                              "desconto_valor": 14000.0, "total": 46000.0, "rotulo": ""}
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
     assert "Valor total = R$ 60.000,00" in texto
-    assert "Valor total com desconto especial de 23.3% = R$ 46.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
     assert "Valor bruto" not in texto
 
 
@@ -342,3 +342,18 @@ def test_nid_sem_desconto_sai_so_o_valor_por_extenso(tmp_path):
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
     assert "R$ 12.000,00 (Doze Mil Reais)" in texto
     assert "desconto especial" not in texto
+
+
+@pytest.mark.parametrize("emissor", EMISSORES)
+def test_desconto_sai_como_desconto_especial_nas_tres(tmp_path, emissor):
+    """A redação é do grupo, não de uma empresa: "(Valor bruto · Desconto)"
+    não é como se escreve em lugar nenhum."""
+    fechado = {"flying": FECHADO_FLYING, "rinno": FECHADO_RINNO, "nid": FECHADO_NID}[emissor]
+    fechado = {**fechado, "financeiro": {"subtotal": 60000, "desconto_pct": 23.3,
+                                         "desconto_valor": 14000.0, "total": 46000.0,
+                                         "rotulo": "parceria"}}
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / f"{emissor}.docx",
+                              DATA, emissor=emissor))
+    assert "Valor total = R$ 60.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
+    assert "Valor bruto" not in texto

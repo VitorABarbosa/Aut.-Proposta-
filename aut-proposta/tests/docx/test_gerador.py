@@ -52,9 +52,10 @@ def test_gera_docx_com_conteudo_essencial(tmp_path):
     assert "GALLI - REF: EMPREENDIMENTO TESTE" in texto
     assert "A/C: DANIEL PUCCI" in texto
     # Valores (o investimento usa "R$ " com espaço, como no modelo)
-    assert "R$ 33.660,00" in texto           # investimento final
-    assert "R$38.250,00" in texto            # valor bruto (desconto presente)
-    assert "12% parceria" in texto
+    # Com desconto, as duas linhas na redação do grupo.
+    assert "Valor total = R$ 38.250,00" in texto
+    assert ("Valor total com desconto especial de 12% = R$ 33.660,00 "
+            "(Trinta e Três Mil, Seiscentos e Sessenta Reais)") in texto
     assert "Valor total: " in texto
     # Itens numerados
     assert "1. Perspectiva Fachada" in texto
