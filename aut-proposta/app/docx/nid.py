@@ -27,12 +27,11 @@ from app.docx.base import (
     _subtitulo,
     _titulo_secao,
     assinatura,
-    bloco_investimento,
     bloco_pagamento,
     cabecalho_proposta,
     itens_orcados,
 )
-from app.docx.formatos import brl
+from app.docx.formatos import brl, extenso
 from app.empresas import Empresa
 
 HORA_TECNICA = 600.0
@@ -213,6 +212,26 @@ PARCELAS_PAGAMENTO = (
 )
 
 
+def _investimento_nid(doc, numero: str, fin: dict) -> None:
+    """Investimento na redação da NID.
+
+    As propostas dela não mostram "valor bruto · desconto": escrevem duas
+    linhas, "Valor total = X" e "Valor total com desconto especial de N% = Y
+    (por extenso)". Sem desconto, sai só o valor com o extenso, como na
+    Di Biase/Valença.
+    """
+    _subtitulo(doc, f"{numero} INVESTIMENTO:")
+    if fin["desconto_pct"] > 0:
+        p = _par(doc, depois=2, recuo=1.25)
+        _run(p, f"Valor total = {brl(fin['subtotal']).replace('R$', 'R$ ')}")
+        p = _par(doc, depois=8, recuo=1.25)
+        _run(p, f"Valor total com desconto especial de {fin['desconto_pct']:g}% = "
+                f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
+    else:
+        p = _par(doc, depois=8, recuo=1.25)
+        _run(p, f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
+
+
 def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, Any],
              data: dt.date) -> None:
     orc = fechado["orcamento"]
@@ -229,11 +248,15 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     # ===== 2 – Escopo contratado =====
     _titulo_secao(doc, "2", "ITENS A SEREM EXECUTADOS")
     _subtitulo(doc, "2.1 Escopo Contratado:")
+    # A NID não abre preço por item: as três propostas conferidas (Tavares e
+    # Rosseti/Pantojo, Gremp3/Tucuruvi, Di Biase/Valença) listam só o escopo
+    # contratado e fecham um valor único na seção 5. É diferente da Flying e da
+    # Rinno, onde cada item mostra o seu valor.
     for _cat, _rotulo, bloco in itens_orcados(orc):
         for item in bloco["itens"]:
             p = _par(doc, depois=2, recuo=1.0)
             _run(p, "•   ")
-            _run(p, f"{item['descricao']} — {brl(item['preco'])}")
+            _run(p, item["descricao"])
 
     # ===== 3 – Escopo do projeto e entregáveis =====
     _titulo_secao(doc, "3", "ESCOPO DO PROJETO E ENTREGÁVEIS")
@@ -257,7 +280,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
 
     # ===== 5 – Investimento, pagamento e serviços adicionais =====
     _titulo_secao(doc, "5", "INVESTIMENTOS E FORMA DE PAGAMENTO")
-    bloco_investimento(doc, "5.1", fin)
+    _investimento_nid(doc, "5.1", fin)
     bloco_pagamento(doc, "5.2", fin, PARCELAS_PAGAMENTO)
 
     _subtitulo(doc, "5.3 SERVIÇOS ADICIONAIS (ACOMPANHAMENTO E GESTÃO):")
