@@ -26,9 +26,6 @@
    "default": 2200, "descricao_padrao": "Fotografia Aérea Drone — para Fotomontagem", "itens": [
     {"chave": "foto_aerea", "descricao": "Fotografia Aérea Drone — para Fotomontagem", "preco": 2200, "padroes": ["fotografia", "aerea", "aérea"]},
     {"chave": "voo_drone_hora", "descricao": "Voo de Drone — por hora, por endereço (SP)", "preco": 1800, "padroes": ["voo de drone", "hora"]}]},
-  {"nome": "estudos", "ordem": 7, "rotulo": "Estudos de Fachada", "prefixo": "",
-   "default": 18000, "descricao_padrao": "Estudo de Fachada / Cromático", "itens": [
-    {"chave": "estudo_fachada", "descricao": "Estudo de Fachada / Cromático de Fachada", "preco": 18000, "padroes": ["estudo", "cromatico", "cromático"]}]},
   {"nome": "tecnologia", "ordem": 8, "rotulo": "Tecnologias Interativas", "prefixo": "",
    "default": 22800, "descricao_padrao": "Desenvolvimento de Aplicação Web para Tela Touch", "itens": [
     {"chave": "app_web_touch", "descricao": "Desenvolvimento de Aplicação Web — para Tela Touch", "preco": 22800, "padroes": ["aplicativo", "aplicacao", "aplicação", "app", "touch"]},
@@ -63,10 +60,7 @@
   {"nome": "drone", "ordem": 6, "rotulo": "Drone e Fotografia Aérea", "prefixo": "",
    "default": 2100, "descricao_padrao": "Fotografia Aérea — para Fotomontagem", "itens": [
     {"chave": "foto_aerea", "descricao": "Fotografia Aérea — para Fotomontagem", "preco": 2100, "padroes": ["fotografia", "aerea", "aérea"]},
-    {"chave": "voo_drone_hora", "descricao": "Voo de Drone — por hora, por endereço (SP)", "preco": 2100, "padroes": ["voo de drone", "hora"]}]},
-  {"nome": "estudos", "ordem": 7, "rotulo": "Estudos de Fachada", "prefixo": "",
-   "default": 11500, "descricao_padrao": "Estudo de Fachada / Cromático", "itens": [
-    {"chave": "estudo_fachada", "descricao": "Estudo de Fachada / Cromático de Fachada", "preco": 11500, "padroes": ["estudo", "cromatico", "cromático"]}]}
+    {"chave": "voo_drone_hora", "descricao": "Voo de Drone — por hora, por endereço (SP)", "preco": 2100, "padroes": ["voo de drone", "hora"]}]}
 ]},
  "rinno": {"categorias": [
   {"nome": "rinno_filmes", "ordem": 1, "rotulo": "Filmes", "prefixo": "",
@@ -88,7 +82,7 @@
  "nid": {"categorias": [
   {"nome": "nid_fachada", "ordem": 1, "rotulo": "Design de Fachada", "prefixo": "",
    "default": 22000, "descricao_padrao": "Design de Fachada", "itens": [
-    {"chave": "design_fachada", "descricao": "Design de Fachada", "preco": 22000, "padroes": ["fachada"]}]},
+    {"chave": "design_fachada", "descricao": "Design de Fachada", "preco": 22000, "padroes": ["fachada", "estudo", "cromatico", "cromático"]}]},
   {"nome": "nid_interiores", "ordem": 2, "rotulo": "Projetos de Interiores", "prefixo": "",
    "default": 2500, "descricao_padrao": "Projeto de Interiores — Áreas Comuns / Lazer (por ambiente)", "itens": [
     {"chave": "apto_modelo_3dorm", "descricao": "Projeto de Interiores — Apto Modelo Decorado (3 dormitórios)", "preco": 20000, "padroes": ["3 ?dorm", "tres dorm"]},

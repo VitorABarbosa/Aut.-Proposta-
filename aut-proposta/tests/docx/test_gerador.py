@@ -122,7 +122,7 @@ def test_categorias_dinamicas_via_categorias_meta(tmp_path):
         {"nome": "filmes", "rotulo": "Filmes e Takes 3D"},
         {"nome": "tour_virtual", "rotulo": "Tour Virtual / VR 360"},
         {"nome": "drone", "rotulo": "Drone e Fotografia Aérea"},
-        {"nome": "estudos", "rotulo": "Estudos de Fachada"},
+        {"nome": "drone", "rotulo": "Drone e Fotografia Aérea"},
         {"nome": "tecnologia", "rotulo": "Tecnologias Interativas"},
     ]
     saida = tmp_path / "p.docx"
@@ -134,7 +134,7 @@ def test_categorias_dinamicas_via_categorias_meta(tmp_path):
     assert "2.3 Plantas Humanizadas 2D" in texto
     assert "2.4 Filmes e Takes 3D" in texto
     assert "2.5 Tecnologias Interativas" in texto
-    # Categorias sem itens (tour_virtual/drone/estudos) não geram subtítulo.
+    # Categorias sem itens (tour_virtual/drone) não geram subtítulo.
     assert "Tour Virtual / VR 360" not in texto
     assert "Drone e Fotografia Aérea" not in texto
     assert "Estudos de Fachada" not in texto

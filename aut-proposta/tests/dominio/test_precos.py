@@ -78,7 +78,7 @@ def test_meta_devolve_rotulo_prefixo_ordem():
 def test_json_padrao_tem_8_categorias_incluindo_filmes_e_tecnologia():
     t = TabelaPrecos()
     nomes = t.categorias()
-    assert len(nomes) == 8
+    assert len(nomes) == 7
     assert "filmes" in nomes and "tecnologia" in nomes
     # ordem determinística
     assert nomes == sorted(nomes, key=lambda c: t.meta(c)["ordem"])

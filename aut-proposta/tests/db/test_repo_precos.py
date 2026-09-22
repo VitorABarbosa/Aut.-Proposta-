@@ -16,7 +16,7 @@ def test_carrega_categorias_novas_com_meta_e_ordem(db):
 
     assert "filmes" in nomes
     assert "tecnologia" in nomes
-    assert len(nomes) == 8  # as 8 categorias do catálogo 2026 (tabela padrao)
+    assert len(nomes) == 7  # as 7 categorias da Flying (estudo de fachada é da NID)
 
     # ordem determinística conforme a coluna `ordem`
     ordens = [tabela.dados[n]["_ordem"] for n in nomes]
@@ -46,10 +46,10 @@ def test_mcmv_carrega_precos_proprios(db):
     assert mcmv.dados["internas"]["_default"] == 1500
     assert padrao.dados["internas"]["_default"] == 1750
 
-    # mcmv não tem "tecnologia" nem "estudos" com o mesmo preço da planilha padrão
+    # mcmv não tem "tecnologia" e tem preços próprios
     assert "tecnologia" not in mcmv.dados
-    assert mcmv.dados["estudos"]["_default"] == 11500
-    assert padrao.dados["estudos"]["_default"] == 18000
+    assert "tecnologia" not in mcmv.categorias()
+    assert padrao.dados["tecnologia"]["_default"] == 22800
 
 
 def test_ordem_preservada_primeiro_match_vence(db):

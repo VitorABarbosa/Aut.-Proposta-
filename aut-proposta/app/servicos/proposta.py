@@ -74,11 +74,12 @@ SERVICO_POR_PADRAO: tuple[tuple[str, str], ...] = (
     (r"explorador|d\.?\s?brave", "tecnologia"),
     (r"maquete", "tecnologia"),
     (r"tour\s*virtual|vista\s*virtual|vr\s*360|360\s*vr|panos?\s*360", "tour_virtual"),
-    (r"estudo\s*(de)?\s*fachada|crom[aá]tico", "estudos"),
     (r"drone|foto(grafia)?\s*a[eé]rea", "drone"),
     (r"\bfilme\b|\btakes?\b|document[aá]rio", "filmes"),
     (r"stand\s*de\s*vendas|\bpdv\b|apto\s*modelo|apartamento\s*modelo", "nid_interiores"),
-    (r"design\s*de\s*fachada", "nid_fachada"),
+    # "Estudo de fachada" e "cromático" são o nome antigo do design de fachada,
+    # que é serviço da NID — nunca da Flying, onde já esteve no catálogo.
+    (r"design\s*de\s*fachada|estudo\s*(de)?\s*fachada|crom[aá]tico", "nid_fachada"),
 )
 
 
@@ -169,6 +170,14 @@ def _rotulo_de(cat: str) -> str:
     return nome.replace("_", " ").strip().capitalize()
 
 
+def _empresa_da_categoria(cat: str) -> str | None:
+    """'nid_fachada' -> 'nid'. Categoria sem prefixo é da Flying, que não usa um."""
+    for emissor in EMISSORES:
+        if cat.startswith(f"{emissor}_"):
+            return emissor
+    return None
+
+
 def _acrescentar_fora_da_tabela(orc: Orcamento, fora: dict[str, list]) -> None:
     """Categorias que a tabela não tem entram no orçamento com os itens que a
     pessoa pediu: preço informado, ou zero (a pendência pede o valor)."""
@@ -234,10 +243,21 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
         and not cat.startswith("_")
     }
     for cat, itens in fora_da_tabela.items():
-        avisos.append(
-            f"Categoria '{cat}' não está na tabela {tabela_precos} — "
-            f"{len(itens)} item(ns) sem preço de tabela; informe o valor."
-        )
+        dona = _empresa_da_categoria(cat)
+        if dona and dona != emissor:
+            # Serviço de outra empresa do grupo: dizer de quem é poupa a
+            # descoberta. Cada proposta é de uma empresa só — "design de
+            # fachada" numa proposta da Flying é proposta da NID.
+            avisos.append(
+                f"'{_rotulo_de(cat)}' é serviço da {empresa_emissora(dona).nome}, não da "
+                f"{empresa_emissora(emissor).nome} — refaça por lá, ou informe o valor à "
+                f"mão ({len(itens)} item(ns) sem preço)."
+            )
+        else:
+            avisos.append(
+                f"Categoria '{cat}' não está na tabela {tabela_precos} — "
+                f"{len(itens)} item(ns) sem preço de tabela; informe o valor."
+            )
     # Tour virtual é cobrado por ambiente: 7 áreas de lazer custam 7x cada
     # etapa. Sem a quantidade, a conta sai por 1 e o valor fica errado — por
     # isso o aviso, e a pendência em `_pendencias` quando ninguém perguntou.

@@ -321,11 +321,11 @@ def test_filme_em_categoria_da_flying_com_emissor_rinno_e_precificado(db):
 
 def test_remap_nunca_cruza_de_uma_empresa_para_outra(db):
     """`rinno_filmes` com emissor flying não vira `filmes`: são produtos
-    diferentes. Fica o aviso, como antes."""
+    diferentes. Fica o aviso, agora dizendo de quem é o serviço."""
     _prep(db)
     est = _estrutura() | {"rinno_filmes": ["Filme conceito"]}
     out = svc.levantar(db, est)
-    assert any("rinno_filmes" in a and "não está na tabela" in a for a in out["avisos"])
+    assert any("RINNO FILMS" in a and "não da FLYING STUDIO" in a for a in out["avisos"])
     # Entra zerado, pendente — não some.
     assert out["fechado"]["orcamento"]["rinno_filmes"]["itens"][0]["preco"] == 0
 
@@ -526,7 +526,7 @@ def test_cena_de_verdade_continua_sendo_cena(catalogo):
     ("Vista virtual web multiplataforma", "tour_virtual"),
     ("Desenvolvimento de aplicação web para tela touch", "tecnologia"),
     ("Explorador D.Brave", "tecnologia"),
-    ("Estudo de fachada", "estudos"),
+    ("Estudo de fachada", "nid_fachada"),   # nome antigo do design de fachada
     ("Fotografia aérea com drone", "drone"),
     ("Filme institucional", "filmes"),
 ])

@@ -10,15 +10,15 @@ def test_seed_popula_categorias_e_itens_das_quatro_tabelas(db):
     aplicar_schema(db)
     contagens = semear_precos(db)
 
-    # 8 (padrao) + 7 (mcmv) da Flying, 3 da Rinno e 5 da NID.
-    assert contagens["categorias"] == 23
+    # 7 (padrao) + 6 (mcmv) da Flying, 3 da Rinno e 5 da NID.
+    assert contagens["categorias"] == 21
     assert contagens["itens"] >= 15  # ao menos uma linha por categoria
 
     with db.cursor() as cur:
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'padrao'")
-        assert cur.fetchone()[0] == 8
-        cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'mcmv'")
         assert cur.fetchone()[0] == 7
+        cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'mcmv'")
+        assert cur.fetchone()[0] == 6
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'rinno'")
         assert cur.fetchone()[0] == 3
         cur.execute("SELECT count(*) FROM preco_categoria WHERE tabela = 'nid'")
