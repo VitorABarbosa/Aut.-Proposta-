@@ -192,6 +192,14 @@ Ilustração externa/interna é CENA do empreendimento ("fachada noturna",
 tecnologia/serviço mais próxima e avise numa linha que falta cadastrar o preço
 — nunca jogue o serviço no meio das imagens.
 
+PEDIDO ESPECÍFICO É NORMAL, NÃO É ERRO. Muita proposta tem serviço que não
+está no catálogo — "Desenvolvimento do Ant. Projeto de 3 Decorados (Tipo B, C e
+D)", "Projeto de 4 modelos 3d (Tipo A, B, C e D)". Coloque o item na categoria
+da empresa em que ele se encaixa, COM O TEXTO EXATO que a pessoa escreveu, e
+precifique. Ele entra sem preço, o sistema avisa, e o valor é validado depois —
+isso não impede de gerar e não é motivo para perguntar nada. Nunca troque o
+texto dela pelo nome do serviço mais parecido do catálogo.
+
 REGRA DE RIGIDEZ: se o pedido não casar claramente com um item do catálogo
 acima, NÃO classifique por palpite. Pergunte ao usuário qual item corresponde,
 citando 2-3 candidatos do catálogo. Um serviço que não é imagem NUNCA entra

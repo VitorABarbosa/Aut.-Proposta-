@@ -119,7 +119,7 @@ def _formata_descricao(desc_usuario: str, categoria: str, tabela: TabelaPrecos) 
 
 
 def descricao_final(desc_usuario: str, categoria: str, tabela: TabelaPrecos,
-                    descricao_do_catalogo: str) -> str:
+                    descricao_do_catalogo: str, casou: bool = True) -> str:
     """Como o item vai aparecer escrito na proposta.
 
     Categoria COM prefixo de escrita é imagem: cada cena é diferente ("Fachada
@@ -129,7 +129,10 @@ def descricao_final(desc_usuario: str, categoria: str, tabela: TabelaPrecos,
     escreveu na pressa ("filme corretor" vira "Filme Corretor / Produto de até
     1:30"). É o que garante que a proposta saia com o nome comercial certo.
     """
-    if not e_categoria_de_imagem(categoria, tabela) and _descricao_e_so_o_nome(desc_usuario):
+    # Só troca pelo nome comercial o item que casou com uma linha do catálogo.
+    # Sem isso, um pedido específico vira o nome do serviço mais parecido.
+    if (casou and not e_categoria_de_imagem(categoria, tabela)
+            and _descricao_e_so_o_nome(desc_usuario)):
         return descricao_do_catalogo
     desc = desc_usuario.strip()
     return desc[:1].upper() + desc[1:] if not e_categoria_de_imagem(categoria, tabela) else \
@@ -203,6 +206,15 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
     if not preco_catalogo:
         return 0, f"a_definir:{chave}"
 
+    # Serviço que o catálogo NÃO reconhece também entra sem preço. O default da
+    # categoria serve para imagem, onde uma cena é uma cena e todas custam o
+    # mesmo; em serviço ele é chute com cara de tabela — "Desenvolvimento do
+    # Ant. Projeto de 3 Decorados" saía a R$ 2.500, o preço de área comum por
+    # ambiente. Pedido específico é assim: entra com o texto de quem pediu, e o
+    # valor se valida depois.
+    if chave == "default" and not e_categoria_de_imagem(categoria, tabela):
+        return 0, "a_definir:default"
+
     vezes = ambientes if e_categoria_por_ambiente(categoria) and ambientes > 1 else 1
     sufixo = f" x{vezes} ambientes" if vezes > 1 else ""
     if ajuste_pct:
@@ -236,7 +248,8 @@ def orcar_pela_planilha(
                 ItemOrcado(
                     descricao=desc,
                     descricao_normalizada=descricao_final(
-                        desc, cat, tabela, classif["descricao_padrao"]),
+                        desc, cat, tabela, classif["descricao_padrao"],
+                        casou=classif["chave"] != "default"),
                     preco=preco,
                     fonte=fonte,
                 )
