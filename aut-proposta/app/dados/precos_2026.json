@@ -78,6 +78,10 @@
   {"nome": "nid_produto", "ordem": 4, "rotulo": "Desenvolvimento de Produto", "prefixo": "",
    "default": 20000, "descricao_padrao": "Desenvolvimento de Produto / Conceito + Áreas de Lazer", "itens": [
     {"chave": "produto_conceito", "descricao": "Desenvolvimento de Produto / Conceito + Áreas de Lazer", "preco": 20000, "padroes": ["produto", "conceito"]}]},
+  {"nome": "nid_arquitetura", "ordem": 6, "rotulo": "Projeto Executivo e Complementares", "prefixo": "",
+   "default": 0, "descricao_padrao": "Projeto Executivo Arquitetônico", "itens": [
+    {"chave": "projeto_executivo", "descricao": "Projeto Executivo Arquitetônico", "preco": 0, "padroes": ["executivo", "arquitetonico", "arquitetônico"]},
+    {"chave": "paisagismo", "descricao": "Projeto de Paisagismo", "preco": 0, "padroes": ["paisagismo", "paisagistico", "paisagístico"]}]},
   {"nome": "nid_decoracao", "ordem": 5, "rotulo": "Planilha de Decoração", "prefixo": "",
    "default": 6500, "descricao_padrao": "Planilha de Decoração (Quantificativos e Descritivos + Valores)", "itens": [
     {"chave": "planilha_decoracao", "descricao": "Planilha de Decoração (Quantificativos e Descritivos + Valores)", "preco": 6500, "padroes": ["decoracao", "quantificativo", "descritivo"]}]}

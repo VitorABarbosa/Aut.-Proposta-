@@ -467,7 +467,7 @@ def test_preco_informado_negativo_e_erro(db):
 def test_tabela_vazia_no_banco_nao_bloqueia_e_aceita_o_preco_dito(db):
     """Backend subiu sem o seed em produção. A tabela é base, não verdade
     absoluta: o item entra com o preço que a pessoa disse ("viral por 4 mil"),
-    e o que ela não disse fica pendente — mais o aviso do seed."""
+    o que ela não disse entra zerado, e nada disso impede de gerar."""
     aplicar_schema(db)  # schema sim, seed não
     est = _estrutura_rinno() | {
         "rinno_filmes": [{"descricao": "Filme viral", "preco": 4000}, "Filme conceito"],
@@ -480,8 +480,10 @@ def test_tabela_vazia_no_banco_nao_bloqueia_e_aceita_o_preco_dito(db):
     assert itens[1]["preco"] == 0 and itens[1]["fonte"] == "sem_tabela"
     assert out["fechado"]["financeiro"]["total"] == 4000.0
     assert any("não está carregado no banco" in a and "seed_precos" in a for a in out["avisos"])
+    # Falta de preço é aviso, não pendência: não trava o Gerar.
+    assert any("Sem preço de tabela" in a and "Filme conceito" in a for a in out["avisos"])
     from app.api.main import _pendencias
-    assert "'Filme conceito' está sem preço — informe o valor." in _pendencias(out["estrutura"], out["fechado"])
+    assert _pendencias(out["estrutura"], out["fechado"]) == []
 
 
 def test_categoria_fora_da_tabela_entra_com_o_preco_informado(db):
@@ -565,3 +567,39 @@ def test_servico_da_rinno_mandado_como_imagem_chega_em_rinno_filmes(catalogo):
     orc = lev["fechado"]["orcamento"]
     assert orc["rinno_filmes"]["qtd"] == 1
     assert orc.get("externas", {"qtd": 0})["qtd"] == 0
+
+
+# ---------- serviço sem preço de tabela não trava a proposta ----------
+
+
+def test_projeto_executivo_entra_como_servico_e_nao_trava(catalogo):
+    """"apenas liste como serviço e nós manualmente colocaremos o preço
+    depois, não precisa travar por causa de preço"."""
+    from app.api.main import _pendencias
+
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "Tavares e Rosseti", "ref": "Pantojo", "contato": "Luis"},
+        "emissor": "nid", "tabela_precos": "nid",
+        "nid_arquitetura": ["Projeto Executivo Arquitetônico", "Projeto de Paisagismo"],
+        "nid_fachada": ["Design de fachada"]})
+    orc = lev["fechado"]["orcamento"]
+
+    itens = orc["nid_arquitetura"]["itens"]
+    assert [i["descricao"] for i in itens] == ["Projeto Executivo Arquitetônico",
+                                               "Projeto de Paisagismo"]
+    assert all(i["preco"] == 0 and i["fonte"].startswith("a_definir") for i in itens)
+    # O que tem preço continua somando normalmente.
+    assert lev["fechado"]["financeiro"]["total"] == 22000.0
+    # Avisa, mas não impede de gerar.
+    assert any("Sem preço de tabela" in a for a in lev["avisos"])
+    assert _pendencias(lev["estrutura"], lev["fechado"]) == []
+
+
+def test_preco_dito_pela_pessoa_manda_no_servico_sem_tabela(catalogo):
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "X", "ref": "Y", "contato": "Z"},
+        "emissor": "nid", "tabela_precos": "nid",
+        "nid_arquitetura": [{"descricao": "Projeto Executivo Arquitetônico", "preco": 18000}]})
+    item = lev["fechado"]["orcamento"]["nid_arquitetura"]["itens"][0]
+    assert (item["preco"], item["fonte"]) == (18000, "informado")
+    assert not any("Sem preço de tabela" in a for a in lev["avisos"])

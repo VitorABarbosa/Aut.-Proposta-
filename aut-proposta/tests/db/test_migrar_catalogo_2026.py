@@ -13,7 +13,7 @@ def test_migracao_e_idempotente_rodando_2x(db):
     # na 1a vez e já migrado na 2a).
     c1 = migrar(db)
     c2 = migrar(db)
-    assert c1 == c2 == {"categorias": 17, "itens": c1["itens"]}
+    assert c1 == c2 == {"categorias": 18, "itens": c1["itens"]}
 
     tabela = carregar_tabela_precos(db, "padrao")
     assert "tecnologia" in tabela.dados

@@ -197,6 +197,12 @@ def preco_final(preco_catalogo: int, chave: str, categoria: str, tabela: TabelaP
     if preco_por_imagem is not None and e_categoria_de_imagem(categoria, tabela):
         return int(preco_por_imagem), "fixo_por_imagem"
 
+    # Serviço cadastrado sem preço de tabela ("Projeto Executivo Arquitetônico"):
+    # entra na proposta e o valor vai à mão depois. A tabela é base, e serviço
+    # sem preço não pode impedir a proposta de existir.
+    if not preco_catalogo:
+        return 0, f"a_definir:{chave}"
+
     vezes = ambientes if e_categoria_por_ambiente(categoria) and ambientes > 1 else 1
     sufixo = f" x{vezes} ambientes" if vezes > 1 else ""
     if ajuste_pct:
