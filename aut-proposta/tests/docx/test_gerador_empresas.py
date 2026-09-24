@@ -105,12 +105,12 @@ def test_nid_traz_fases_laminas_e_servicos_adicionais(tmp_path):
 
 
 def test_nid_tem_uma_hora_tecnica_so(tmp_path):
-    """No modelo em Word ela aparecia como R$ 600,00 no investimento e
-    R$ 300,00/h nas considerações — o cliente atento usa a menor."""
+    """No modelo em Word ela aparecia como 600,00 no investimento e
+    300,00/h nas considerações — o cliente atento usa a menor."""
     saida = gerar_docx(CLIENTE, FECHADO_NID, tmp_path / "n.docx", data=DATA, emissor="nid")
     texto = _texto(saida)
-    assert "R$600,00" in texto
-    assert "R$300,00" not in texto
+    assert "600,00" in texto
+    assert "300,00" not in texto
     assert "hora técnica prevista no item 5.3" in texto
     # E a taxa de acompanhamento é citada no item em que de fato está.
     assert "prevista no item 5.3" in texto and "prevista no Item 4" not in texto
@@ -121,8 +121,8 @@ def test_pagamento_e_conta_feita_no_codigo(tmp_path):
     saida = gerar_docx(CLIENTE, FECHADO_NID, tmp_path / "n.docx", data=DATA, emissor="nid")
     texto = _texto(saida)
     total = FECHADO_NID["financeiro"]["total"]  # 44.500,00
-    assert "50% – Na aprovação desta Proposta (R$22.250,00)" in texto
-    assert "25% – Aprovação do Estudo Preliminar (EP) (R$11.125,00)" in texto
+    assert "50% – Na aprovação desta Proposta (22.250,00)" in texto
+    assert "25% – Aprovação do Estudo Preliminar (EP) (11.125,00)" in texto
     assert total == 44500.0
 
 
@@ -184,7 +184,7 @@ def test_cortesia_sai_como_palavra_e_nao_como_zero(tmp_path):
     saida = gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", data=DATA, emissor="rinno")
     texto = _texto(saida)
     assert "CORTESIA" in texto
-    assert "R$ 0,00" not in texto
+    assert " 0,00" not in texto
     assert "Valor bruto" not in texto
 
 
@@ -200,11 +200,11 @@ def test_rinno_segue_o_modelo_oficial_em_word(tmp_path):
     texto = _texto(saida)
 
     assert "3.1 Investimentos da Produção Técnica dos Filmes Acima" in texto
-    assert "R$ 18.500,00 (Dezoito Mil, e Quinhentos Reais)" in texto or \
-           "R$ 18.500,00 (Dezoito Mil e Quinhentos Reais)" in texto or \
-           "R$ 18.500,00 (Dezoito Mil, Quinhentos Reais)" in texto
-    assert "50% – Na aprovação desta Proposta (R$9.250,00)" in texto
-    assert "50% – Na Entrega dos Filmes (R$9.250,00)" in texto
+    assert "18.500,00 (Dezoito Mil, e Quinhentos Reais)" in texto or \
+           "18.500,00 (Dezoito Mil e Quinhentos Reais)" in texto or \
+           "18.500,00 (Dezoito Mil, Quinhentos Reais)" in texto
+    assert "50% – Na aprovação desta Proposta (9.250,00)" in texto
+    assert "50% – Na Entrega dos Filmes (9.250,00)" in texto
     assert "25%" not in texto.split("3.2 FORMA DE PAGAMENTO:")[1].split("4  –")[0]
     # Conceito tem lista; viral tem uma linha só e vem direto.
     assert texto.count("Este item inclui:") == 1
@@ -219,7 +219,7 @@ def test_investimento_sai_por_extenso_nas_tres(tmp_path):
     texto = _texto(gerar_docx(CLIENTE, FECHADO_FLYING, tmp_path / "f.docx",
                               data=DATA, emissor="flying"))
     assert "(" in texto.split("INVESTIMENTO PARA O DESENVOLVIMENTOS")[1].split("\n")[1]
-    assert "R$ 3.000,00 (Três Mil Reais)" in texto
+    assert "3.000,00 (Três Mil Reais)" in texto
 
     texto_nid = _texto(gerar_docx(CLIENTE, FECHADO_NID, tmp_path / "n.docx",
                                   data=DATA, emissor="nid"))
@@ -274,7 +274,7 @@ def test_imagem_nao_ganha_escopo_de_servico(tmp_path):
 
 
 def test_cada_filme_sai_com_o_seu_valor_alem_do_total(tmp_path):
-    """A proposta enviada mostrava só "Filmes — Valor total: R$38.000,00", e
+    """A proposta enviada mostrava só "Filmes — Valor total: 38.000,00", e
     o cliente tinha de perguntar quanto custava cada filme."""
     fechado = _fechado([("rinno_filmes", "Filmes", [
         ("Filme Conceito de até 2:30 (Dois Minutos e Meio)", 19000),
@@ -283,11 +283,11 @@ def test_cada_filme_sai_com_o_seu_valor_alem_do_total(tmp_path):
     ])])
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "r.docx", DATA, emissor="rinno"))
 
-    assert "2.1 Um Filme Conceito de até 2:30 (Dois Minutos e Meio) — R$19.000,00" in texto
-    assert "2.2 Um Filme Corretor / Produto de até 1:30 (Um Minuto e Meio) — R$14.000,00" in texto
-    assert "2.3 Um Filme Viral de até 1:00 (Um Minuto) — formato 9:16 — R$4.000,00" in texto
+    assert "2.1 Um Filme Conceito de até 2:30 (Dois Minutos e Meio) — 19.000,00" in texto
+    assert "2.2 Um Filme Corretor / Produto de até 1:30 (Um Minuto e Meio) — 14.000,00" in texto
+    assert "2.3 Um Filme Viral de até 1:00 (Um Minuto) — formato 9:16 — 4.000,00" in texto
     # O total da categoria continua, somando os três.
-    assert "Filmes — Valor total: R$37.000,00" in texto
+    assert "Filmes — Valor total: 37.000,00" in texto
 
 
 
@@ -304,7 +304,7 @@ def test_dsbrave_sai_com_os_sete_modulos(tmp_path):
                    "Revista Digital", "Split.View / Acompanhamento de Obra",
                    "Espelho de Vendas (integração com CV)"):
         assert modulo in texto, modulo
-    assert "D.sbrave — Apartamento Modelo Virtual — R$69.000,00" in texto
+    assert "D.sbrave — Apartamento Modelo Virtual — 69.000,00" in texto
 
 
 # ---------- NID: escopo contratado sem preço por item ----------
@@ -321,7 +321,7 @@ def test_nid_lista_o_escopo_sem_abrir_preco_por_item(tmp_path):
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
     assert "Projeto Apto modelo decorado" in texto
     assert "Projeto do PDV" in texto
-    assert "R$20.000,00" not in texto and "R$15.000,00" not in texto
+    assert "20.000,00" not in texto and "15.000,00" not in texto
 
 
 def test_nid_escreve_o_desconto_como_desconto_especial(tmp_path):
@@ -331,8 +331,8 @@ def test_nid_escreve_o_desconto_como_desconto_especial(tmp_path):
     fechado["financeiro"] = {"subtotal": 60000, "desconto_pct": 23.3,
                              "desconto_valor": 14000.0, "total": 46000.0, "rotulo": ""}
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
-    assert "Valor total = R$ 60.000,00" in texto
-    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
+    assert "Valor total = 60.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = 46.000,00" in texto
     assert "Valor bruto" not in texto
 
 
@@ -340,7 +340,7 @@ def test_nid_sem_desconto_sai_so_o_valor_por_extenso(tmp_path):
     """Di Biase/Valença: "12.000,00 (Doze Mil Reais)"."""
     fechado = _fechado([("nid_fachada", "Design de Fachada", [("Design de Fachada", 12000)])])
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "n.docx", DATA, emissor="nid"))
-    assert "R$ 12.000,00 (Doze Mil Reais)" in texto
+    assert "12.000,00 (Doze Mil Reais)" in texto
     assert "desconto especial" not in texto
 
 
@@ -354,19 +354,19 @@ def test_desconto_sai_como_desconto_especial_nas_tres(tmp_path, emissor):
                                          "rotulo": "parceria"}}
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / f"{emissor}.docx",
                               DATA, emissor=emissor))
-    assert "Valor total = R$ 60.000,00" in texto
-    assert "Valor total com desconto especial de 23,3% = R$ 46.000,00" in texto
+    assert "Valor total = 60.000,00" in texto
+    assert "Valor total com desconto especial de 23,3% = 46.000,00" in texto
     assert "Valor bruto" not in texto
 
 
 def test_item_sem_preco_sai_como_a_definir_e_nao_como_zero(tmp_path):
-    """"R$0,00" numa proposta enviada é pior do que não dizer nada."""
+    """Um item a "0,00" numa proposta enviada é pior do que não dizer nada."""
     fechado = _fechado([("tecnologia", "Tecnologias Interativas", [
         ("Maquete Eletrônica", 25000), ("Projeto Executivo Arquitetônico", 0)])])
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
-    assert "Maquete Eletrônica — R$25.000,00" in texto
+    assert "Maquete Eletrônica — 25.000,00" in texto
     assert "Projeto Executivo Arquitetônico — a definir" in texto
-    assert "R$0,00" not in texto
+    assert " 0,00" not in texto
 
 
 def test_tour_sai_como_um_item_com_o_escopo_embaixo(tmp_path):
@@ -378,7 +378,7 @@ def test_tour_sai_como_um_item_com_o_escopo_embaixo(tmp_path):
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
 
     assert "2.1 Tour Virtual / VR 360 (25 ambientes)" in texto
-    assert "1. Vista Virtual Web – Multiplataforma – Áreas de Lazer — R$45.000,00" in texto
+    assert "1. Vista Virtual Web – Multiplataforma – Áreas de Lazer — 45.000,00" in texto
     for etapa in ("Elaboração 3d (Arquitetura / Decoração)", "Render 360° VR",
                   "Versão Mobile Offline – Panos 360º"):
         assert f"– {etapa}" in texto
@@ -390,7 +390,7 @@ def test_pagamento_em_4x_troca_o_cronograma_da_empresa(tmp_path):
     fechado = _fechado([("externas", "Ilustrações Externas", [("Perspectiva Fachada", 45000)])])
     fechado["orcamento"]["parcelas"] = 4
     texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
-    assert "Em 4x – Ato de R$11.250,00 + 3x de R$11.250,00" in texto
+    assert "Em 4x – Ato de 11.250,00 + 3x de 11.250,00" in texto
     assert "50% – Na aprovação desta Proposta" not in texto
 
 
@@ -414,7 +414,7 @@ def test_contagem_de_ambientes_no_titulo_e_opcional(tmp_path):
     fechado["orcamento"]["mostrar_ambientes"] = False
     sem = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "b.docx", DATA, emissor="flying"))
     assert "ambientes)" not in sem
-    assert "R$45.000,00" in sem
+    assert "45.000,00" in sem
 
 
 @pytest.mark.parametrize("emissor,fechado", [

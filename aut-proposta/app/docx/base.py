@@ -169,13 +169,13 @@ def cabecalho_proposta(doc, empresa: Empresa, cliente: dict[str, str]) -> None:
 
 def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -> None:
     """Valor fechado da proposta, por extenso como nos modelos oficiais
-    ("R$ 59.000,00 (Cinquenta e Nove Mil Reais)").
+    ("59.000,00 (Cinquenta e Nove Mil Reais)").
 
     Havendo desconto, saem duas linhas, na redação que o grupo usa em TODAS as
     propostas — a antiga "(Valor bruto … · Desconto …)" não é como se escreve:
 
-        Valor total = R$ 60.000,00
-        Valor total com desconto especial de 23,3% = R$ 46.000,00 (Quarenta e Seis Mil Reais)
+        Valor total = 60.000,00
+        Valor total com desconto especial de 23,3% = 46.000,00 (Quarenta e Seis Mil Reais)
 
     "DESENVOLVIMENTOS" no plural é como está no modelo oficial das três
     empresas — não é erro de digitação daqui.
@@ -183,7 +183,7 @@ def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -
     _subtitulo(doc, f"{numero} {titulo or 'INVESTIMENTO PARA O DESENVOLVIMENTOS DOS ITENS ACIMA DESCRITOS:'}")
 
     # Proposta de cortesia (100% de desconto): o item mostra o valor, e o
-    # investimento sai como a Rinno faz — a palavra, não "R$ 0,00".
+    # investimento sai como a Rinno faz — a palavra, não "0,00".
     if fin["total"] == 0 and fin["subtotal"] > 0:
         p = _par(doc, depois=8, recuo=1.25)
         _run(p, "CORTESIA", estilo="b")
@@ -191,15 +191,15 @@ def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -
 
     if fin["desconto_pct"] > 0:
         p = _par(doc, depois=2, recuo=1.25)
-        _run(p, f"Valor total = {brl(fin['subtotal']).replace('R$', 'R$ ')}")
+        _run(p, f"Valor total = {brl(fin['subtotal'])}")
         p = _par(doc, depois=8, recuo=1.25)
         # Percentual com vírgula, como se escreve em português: 23,3% e não 23.3%.
         pct = f"{fin['desconto_pct']:g}".replace(".", ",")
         _run(p, f"Valor total com desconto especial de {pct}% = "
-                f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
+                f"{brl(fin['total'])} ({extenso(fin['total'])})")
     else:
         p = _par(doc, depois=8, recuo=1.25)
-        _run(p, f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
+        _run(p, f"{brl(fin['total'])} ({extenso(fin['total'])})")
 
 
 def bloco_pagamento(doc, numero: str, fin: dict, parcelas: tuple[tuple[int, str], ...],
@@ -207,7 +207,7 @@ def bloco_pagamento(doc, numero: str, fin: dict, parcelas: tuple[tuple[int, str]
     """Forma de pagamento.
 
     Com `vezes` ("pagamento em 4x"), sai o parcelamento pedido: ato + N-1, em
-    valores iguais, como nas propostas ("Em 5x – Ato de R$13.800,00 + 4x de
+    valores iguais, como nas propostas ("Em 5x – Ato de 13.800,00 + 4x de
     13.800,00"). Sem ele, vale o cronograma da empresa, atrelado às etapas.
 
     Em qualquer um dos dois o valor da parcela é conta feita aqui, nunca texto

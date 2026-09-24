@@ -51,10 +51,10 @@ def test_gera_docx_com_conteudo_essencial(tmp_path):
     assert "PROPOSTA DE IMAGENS, FILMES E TECNOLOGIAS 3D" in texto
     assert "GALLI - REF: EMPREENDIMENTO TESTE" in texto
     assert "A/C: DANIEL PUCCI" in texto
-    # Valores (o investimento usa "R$ " com espaço, como no modelo)
+    # Valores: só o número, sem "R$" — a proposta inteira fala de dinheiro.
     # Com desconto, as duas linhas na redação do grupo.
-    assert "Valor total = R$ 38.250,00" in texto
-    assert ("Valor total com desconto especial de 12% = R$ 33.660,00 "
+    assert "Valor total = 38.250,00" in texto
+    assert ("Valor total com desconto especial de 12% = 33.660,00 "
             "(Trinta e Três Mil, Seiscentos e Sessenta Reais)") in texto
     assert "Valor total: " in texto
     # Itens numerados
@@ -89,7 +89,7 @@ def test_sem_desconto_nao_mostra_valor_bruto(tmp_path):
     gerar_docx(CLIENTE, fechado, saida)
     texto = _texto_completo(saida)
     assert "Valor bruto" not in texto
-    assert "R$ 38.250,00" in texto
+    assert "38.250,00" in texto
 
 
 def test_categoria_vazia_omitida_e_renumera(tmp_path):
@@ -223,5 +223,5 @@ def test_cada_item_sai_com_o_seu_valor(tmp_path):
     saida = tmp_path / "p.docx"
     gerar_docx(CLIENTE, _fechado_galli(), saida)
     texto = _texto_completo(saida)
-    assert "1. Perspectiva Fachada — R$3.000,00" in texto
+    assert "1. Perspectiva Fachada — 3.000,00" in texto
     assert "Valor total" in texto          # o total da categoria continua
