@@ -127,3 +127,23 @@ def limpar(nome: str) -> str:
     entrar num nome só porque alguém digitou.
     """
     return _RE_PROIBIDO.sub("", nome).strip(" .")
+
+
+def nome_do_roll(emissor: str, versao: int = 0) -> str:
+    """Como o roll se chama na versão `versao`, sem extensão.
+
+        0 -> Roll_Flying
+        1 -> Roll_Flying_Atl
+        2 -> Roll_Flying_Atl_1
+        3 -> Roll_Flying_Atl_2 ...
+
+    "sempre salvamos como Roll_Flying -> Roll_Flying_Atl -> Roll_Flying_Atl_1
+    e assim por diante". O `_Atl` da primeira atualização não leva número; a
+    contagem começa na segunda.
+    """
+    base = f"Roll_{EMISSOR_NO_ARQUIVO.get((emissor or '').lower(), _token(emissor or ''))}"
+    if versao <= 0:
+        return base
+    if versao == 1:
+        return f"{base}_Atl"
+    return f"{base}_Atl_{versao - 1}"

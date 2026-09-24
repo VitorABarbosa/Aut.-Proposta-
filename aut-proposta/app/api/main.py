@@ -387,3 +387,144 @@ def rota_deletar_proposta(proposta_id: int):
         if arq.exists():
             arq.unlink()
     return {"excluida": proposta_id}
+
+
+# ---------------------------------------------------------------- rolls
+#
+# O roll é a lista do que entra em produção — sem preço — e ele se mexe ao
+# longo do projeto. Vive ao lado da proposta, não dentro dela.
+
+
+class CorpoLeituraRoll(BaseModel):
+    texto: str = ""
+    pdfs: list[str] = []       # base64 ou data URL do PDF do roll
+    imagens: list[str] = []    # data URL de print, para roll escaneado
+
+
+class CorpoRoll(BaseModel):
+    roll: dict
+    emissor: str | None = None
+
+
+@app.post("/rolls/leitura", dependencies=[Depends(verificar_token)])
+def rota_ler_roll(corpo: CorpoLeituraRoll):
+    from app.servicos.roll import interpretar
+
+    try:
+        return {"roll": interpretar(corpo.texto, corpo.pdfs, corpo.imagens)}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _falhou("ler o roll", e) from None
+
+
+@app.post("/rolls", dependencies=[Depends(verificar_token)])
+def rota_gerar_roll(corpo: CorpoRoll):
+    from app.servicos.roll import gerar as gerar_roll
+
+    conn = _abrir_conn()
+    try:
+        out = gerar_roll(conn, corpo.roll, _dir_saida(), corpo.emissor)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _falhou("gerar o roll", e) from None
+    finally:
+        _fechar_conn(conn)
+    return {**out, "download": f"/rolls/{out['roll_id']}/docx",
+            "pdf": f"/rolls/{out['roll_id']}/pdf"}
+
+
+@app.get("/rolls", dependencies=[Depends(verificar_token)])
+def rota_listar_rolls(cliente: str | None = None):
+    from app.db.repo_rolls import listar_rolls
+
+    conn = _abrir_conn()
+    try:
+        rolls = listar_rolls(conn, cliente)
+    except Exception as e:  # noqa: BLE001
+        raise _falhou("listar os rolls", e) from None
+    finally:
+        _fechar_conn(conn)
+    for r in rolls:
+        r["download"] = f"/rolls/{r['id']}/docx"
+        r["pdf"] = f"/rolls/{r['id']}/pdf"
+    return {"rolls": rolls}
+
+
+@app.get("/rolls/{roll_id}", dependencies=[Depends(verificar_token)])
+def rota_obter_roll(roll_id: int):
+    """O roll como foi salvo — é o que a aba carrega para editar e gerar de novo."""
+    from app.db.repo_rolls import obter_roll
+
+    conn = _abrir_conn()
+    try:
+        roll = obter_roll(conn, roll_id)
+    except Exception as e:  # noqa: BLE001
+        raise _falhou("abrir o roll", e) from None
+    finally:
+        _fechar_conn(conn)
+    if roll is None:
+        raise HTTPException(404, "Roll não encontrado")
+    return roll
+
+
+def _nome_do_roll_para_baixar(roll_id: int, extensao: str) -> str:
+    from app.db.repo_rolls import obter_roll
+
+    conn = _abrir_conn()
+    try:
+        roll = obter_roll(conn, roll_id)
+        nome = (roll or {}).get("nome_arquivo")
+    except Exception:  # noqa: BLE001 — nome bonito nunca impede o download
+        nome = None
+    finally:
+        _fechar_conn(conn)
+    return f"{nome or f'roll_{roll_id}'}{extensao}"
+
+
+@app.get("/rolls/{roll_id}/docx", dependencies=[Depends(verificar_token)])
+def rota_download_roll(roll_id: int):
+    caminho = _dir_saida() / f"roll_{roll_id}.docx"
+    if not caminho.exists():
+        raise HTTPException(404, "Roll não encontrado")
+    return FileResponse(caminho, media_type=MIME_DOCX,
+                        filename=_nome_do_roll_para_baixar(roll_id, ".docx"))
+
+
+@app.get("/rolls/{roll_id}/pdf", dependencies=[Depends(verificar_token)])
+def rota_download_roll_pdf(roll_id: int):
+    docx = _dir_saida() / f"roll_{roll_id}.docx"
+    pdf = docx.with_suffix(".pdf")
+    if not pdf.exists():
+        if not docx.exists():
+            raise HTTPException(404, "Roll não encontrado")
+        gerado = converter_para_pdf(docx)
+        if gerado is None:
+            raise HTTPException(501, "Conversor PDF (LibreOffice) indisponível neste servidor")
+        pdf = gerado
+    return FileResponse(pdf, media_type="application/pdf",
+                        filename=_nome_do_roll_para_baixar(roll_id, ".pdf"))
+
+
+@app.delete("/rolls/{roll_id}", dependencies=[Depends(verificar_token)])
+def rota_excluir_roll(roll_id: int):
+    from app.db.repo_rolls import excluir_roll, obter_roll
+
+    conn = _abrir_conn()
+    try:
+        roll = obter_roll(conn, roll_id)
+        if roll is None or not excluir_roll(conn, roll_id):
+            raise HTTPException(404, "Roll não encontrado")
+        conn.commit()
+    finally:
+        _fechar_conn(conn)
+
+    url = roll.get("docx_url")
+    if url and "/Rolls/" in url:
+        excluir_objetos(["Rolls/" + url.split("/Rolls/", 1)[1]])
+    for ext in (".docx", ".pdf"):
+        arq = _dir_saida() / f"roll_{roll_id}{ext}"
+        if arq.exists():
+            arq.unlink()
+    return {"excluido": roll_id}

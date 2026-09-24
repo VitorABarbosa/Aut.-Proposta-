@@ -51,6 +51,26 @@ CREATE TABLE IF NOT EXISTS propostas (
     criado_em       timestamptz NOT NULL DEFAULT now()
 );
 
+-- O roll: a lista do que entra em produção, versionada. Não é a proposta —
+-- não tem preço — e ele se mexe ao longo do projeto: o cliente corta duas
+-- plantas, pede mais uma fachada. Cada versão é uma linha, e `versao` é o
+-- que vira Roll_Flying / _Atl / _Atl_1 no nome do arquivo.
+CREATE TABLE IF NOT EXISTS rolls (
+    id            serial PRIMARY KEY,
+    cliente_id    integer NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    referencia    text,
+    emissor       text NOT NULL DEFAULT 'flying',
+    versao        integer NOT NULL DEFAULT 0,
+    nome_arquivo  text,
+    estrutura     jsonb NOT NULL,
+    docx_url      text,
+    data          date NOT NULL DEFAULT current_date,
+    criado_em     timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS rolls_por_projeto
+    ON rolls (cliente_id, referencia, emissor, versao DESC);
+
 CREATE TABLE IF NOT EXISTS proposta_itens (
     id           serial PRIMARY KEY,
     proposta_id  integer NOT NULL REFERENCES propostas(id) ON DELETE CASCADE,
