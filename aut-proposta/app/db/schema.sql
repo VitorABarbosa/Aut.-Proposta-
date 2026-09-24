@@ -73,6 +73,10 @@ ALTER TABLE preco_categoria ADD COLUMN IF NOT EXISTS prefixo text NOT NULL DEFAU
 -- a partir dos itens perde o que não é item: ajuste de planilha, preço por
 -- imagem, quantidade de ambientes, parcelamento.
 ALTER TABLE propostas ADD COLUMN IF NOT EXISTS estrutura jsonb;
+-- Como o arquivo se chama para o cliente
+-- (Flying_Factus_Upside_Vista_AnexoI_R00). `proposta_57.docx` é nome
+-- interno; o download e o R2 usam este.
+ALTER TABLE propostas ADD COLUMN IF NOT EXISTS nome_arquivo text;
 
 ALTER TABLE preco_categoria ALTER COLUMN preco_default DROP NOT NULL;
 ALTER TABLE preco_categoria ALTER COLUMN descricao_padrao DROP NOT NULL;

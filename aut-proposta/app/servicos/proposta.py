@@ -32,6 +32,7 @@ from app.empresas import empresa as empresa_emissora
 from app.empresas import resolver_tabela
 from app.historico.historico import Historico
 from app.historico.orcamento_historico import orcar_pelo_historico
+from app.servicos.nomes import limpar, nome_do_arquivo
 from app.storage.r2 import enviar_docx
 
 
@@ -361,20 +362,35 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             rotulo=rotulo,
         )
 
+    fechado = _fechar(orc, desconto, total_fechado if acima_da_soma else None, avisos)
+
+    # Como o arquivo vai se chamar para o cliente. O padrão é calculado do
+    # que foi pedido; o que estiver escrito na estrutura manda, porque o nome
+    # é editável no preview como qualquer outra coisa.
+    cliente = estrutura["cliente"]
+    revisao = _inteiro_ou_none(estrutura.get("revisao")) or 0
+    nome_arquivo = limpar(estrutura.get("nome_arquivo") or "") or nome_do_arquivo(
+        emissor, cliente.get("empresa") or "", cliente.get("ref"),
+        fechado["orcamento"], revisao,
+    )
+
     # A estrutura devolvida (e gravada) carrega o que foi RESOLVIDO aqui: sem
     # isso, reabrir a proposta para editar perde o emissor e a tabela.
     estrutura["emissor"] = emissor
     estrutura["tabela_precos"] = tabela_precos
+    estrutura["revisao"] = revisao
+    estrutura["nome_arquivo"] = nome_arquivo
 
     return {
-        "cliente": estrutura["cliente"],
+        "cliente": cliente,
         # A estrutura já no namespace do emissor: quem devolve ao front tem de
         # usar esta, senão o preview lista `rinno_filmes` sem achar os itens.
         "estrutura": estrutura,
-        "fechado": _fechar(orc, desconto, total_fechado if acima_da_soma else None, avisos),
+        "fechado": fechado,
         "estrategia_usada": orc.estrategia,
         "emissor": emissor,
         "tabela_precos": tabela_precos,
+        "nome_arquivo": nome_arquivo,
         "avisos": avisos,
     }
 
@@ -407,16 +423,19 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     proposta_id = salvar_proposta(
         conn, cliente_id, fechado, referencia=cliente.get("ref"),
         tabela_precos=lev["tabela_precos"], emissor=lev["emissor"],
-        estrutura=lev["estrutura"],
+        estrutura=lev["estrutura"], nome_arquivo=lev["nome_arquivo"],
     )
 
     docx_path = Path(dir_saida) / f"proposta_{proposta_id}.docx"
     gerar_docx(cliente, fechado, docx_path, emissor=lev["emissor"])
 
     # Emissor no caminho: o mesmo cliente/ref pode ter proposta das três
-    # empresas, e no R2 elas ficam separadas por pasta.
+    # empresas, e no R2 elas ficam separadas por pasta. O arquivo em si leva
+    # o nome comercial — é ele que a pessoa vê ao baixar do R2 —, com o id
+    # na frente para duas revisões do mesmo nome não se sobrescreverem.
     chave = (f"Propostas/{lev['emissor']}/{_slug(cliente['empresa'])}"
-             f"/{_slug(cliente.get('ref') or 'geral')}/proposta_{proposta_id}.docx")
+             f"/{_slug(cliente.get('ref') or 'geral')}"
+             f"/{proposta_id}_{lev['nome_arquivo']}.docx")
     docx_url = enviar_docx(docx_path, chave)
     if docx_url:
         atualizar_docx_url(conn, proposta_id, docx_url)
@@ -433,6 +452,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
         "docx_path": str(docx_path),
         "docx_url": docx_url,
         "chave_r2": chave,
+        "nome_arquivo": lev["nome_arquivo"],
         "fechado": fechado,
         "emissor": lev["emissor"],
         "avisos": lev["avisos"],

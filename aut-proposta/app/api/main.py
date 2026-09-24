@@ -253,6 +253,7 @@ def rota_gerar(corpo: CorpoProposta):
         "proposta_id": out["proposta_id"],
         "docx_url": out["docx_url"],
         "download": f"/propostas/{out['proposta_id']}/docx",
+        "nome_arquivo": out["nome_arquivo"],
         "fechado": out["fechado"],
         "emissor": out["emissor"],
         "avisos": out["avisos"],
@@ -263,6 +264,7 @@ def rota_gerar(corpo: CorpoProposta):
 def rota_estrutura(proposta_id: int):
     """A proposta como ela foi feita, para editar e gerar de novo."""
     from app.db.repo_propostas import obter_estrutura_de_proposta
+    from app.servicos.nomes import com_revisao
 
     conn = _abrir_conn()
     try:
@@ -273,7 +275,33 @@ def rota_estrutura(proposta_id: int):
         _fechar_conn(conn)
     if estrutura is None:
         raise HTTPException(404, "Proposta não encontrada")
+    # Reabrir uma proposta já enviada para mexer nela é, por definição, a
+    # revisão seguinte: a R00 saiu, esta vira R01. O número é editável no
+    # preview, então quem só abriu para olhar corrige em um clique.
+    estrutura["revisao"] = (estrutura.get("revisao") or 0) + 1
+    if estrutura.get("nome_arquivo"):
+        estrutura["nome_arquivo"] = com_revisao(estrutura["nome_arquivo"],
+                                                estrutura["revisao"])
     return {"estrutura": estrutura}
+
+
+def _nome_para_baixar(proposta_id: int, extensao: str) -> str:
+    """O nome que o arquivo leva ao sair daqui.
+
+    No disco ele é `proposta_57.docx` (estável, sem colisão); na pasta de
+    quem baixa ele é `Flying_Factus_Upside_Vista_AnexoI_R00.docx`. Proposta
+    antiga, sem nome gravado, continua com o interno.
+    """
+    from app.db.repo_propostas import obter_nome_de_arquivo
+
+    conn = _abrir_conn()
+    try:
+        nome = obter_nome_de_arquivo(conn, proposta_id)
+    except Exception:  # noqa: BLE001 — nome bonito nunca impede o download
+        nome = None
+    finally:
+        _fechar_conn(conn)
+    return f"{nome or f'proposta_{proposta_id}'}{extensao}"
 
 
 @app.get("/propostas/{proposta_id}/docx", dependencies=[Depends(verificar_token)])
@@ -282,7 +310,7 @@ def rota_download(proposta_id: int):
     if not caminho.exists():
         raise HTTPException(404, "Proposta não encontrada")
     return FileResponse(caminho, media_type=MIME_DOCX,
-                        filename=f"proposta_{proposta_id}.docx")
+                        filename=_nome_para_baixar(proposta_id, ".docx"))
 
 
 @app.get("/propostas/{proposta_id}/pdf", dependencies=[Depends(verificar_token)])
@@ -297,7 +325,7 @@ def rota_download_pdf(proposta_id: int):
             raise HTTPException(501, "Conversor PDF (LibreOffice) indisponível neste servidor")
         pdf = pdf_gerado
     return FileResponse(pdf, media_type="application/pdf",
-                        filename=f"proposta_{proposta_id}.pdf")
+                        filename=_nome_para_baixar(proposta_id, ".pdf"))
 
 
 @app.get("/propostas", dependencies=[Depends(verificar_token)])

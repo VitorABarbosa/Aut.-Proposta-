@@ -43,6 +43,7 @@ def salvar_proposta(
     tabela_precos: str = "padrao",
     emissor: str = EMISSOR_PADRAO,
     estrutura: dict | None = None,
+    nome_arquivo: str | None = None,
 ) -> int:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
@@ -50,11 +51,12 @@ def salvar_proposta(
         cur.execute(
             "INSERT INTO propostas "
             "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url, "
-            "tabela_precos, emissor, estrutura) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "tabela_precos, emissor, estrutura, nome_arquivo) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (cliente_id, referencia, orc["subtotal"], fin["desconto_pct"],
              fin["desconto_valor"], fin["total"], docx_url, tabela_precos, emissor,
-             json.dumps(estrutura, ensure_ascii=False, default=str) if estrutura else None),
+             json.dumps(estrutura, ensure_ascii=False, default=str) if estrutura else None,
+             nome_arquivo),
         )
         pid = cur.fetchone()[0]
         for cat, bloco in _categorias_do_orcamento(orc):
@@ -155,7 +157,8 @@ def excluir_proposta(conn: psycopg.Connection, proposta_id: int) -> bool:
 def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> list[dict]:
     """Lista propostas (mais recente primeiro), com filtro opcional por cliente."""
     sql = (
-        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url, p.emissor "
+        "SELECT p.id, c.nome, p.referencia, p.data, p.total, p.docx_url, p.emissor, "
+        "p.nome_arquivo "
         "FROM propostas p JOIN clientes c ON c.id = p.cliente_id "
     )
     params: tuple = ()
@@ -168,6 +171,18 @@ def listar_propostas(conn: psycopg.Connection, cliente: str | None = None) -> li
         return [
             {"id": i, "cliente": nome, "referencia": ref,
              "data": data.isoformat(), "total": float(total), "docx_url": url,
-             "emissor": emissor or EMISSOR_PADRAO}
-            for i, nome, ref, data, total, url, emissor in cur.fetchall()
+             "emissor": emissor or EMISSOR_PADRAO, "nome_arquivo": arquivo}
+            for i, nome, ref, data, total, url, emissor, arquivo in cur.fetchall()
         ]
+
+
+def obter_nome_de_arquivo(conn: psycopg.Connection, proposta_id: int) -> str | None:
+    """Como o arquivo daquela proposta se chama para o cliente.
+
+    `None` para proposta gerada antes desta coluna existir — o download cai
+    no nome interno, que é o que ela sempre teve.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT nome_arquivo FROM propostas WHERE id = %s", (proposta_id,))
+        row = cur.fetchone()
+    return (row[0] or None) if row else None

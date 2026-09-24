@@ -18,9 +18,13 @@ _CENTENAS = ["", "Cento", "Duzentos", "Trezentos", "Quatrocentos", "Quinhentos",
 
 
 def brl(valor: float) -> str:
+    """Valor como ele sai na proposta: só o número.
+
+    "sempre tire o R$, só o número direto já está bom" — a proposta inteira
+    fala de dinheiro, a moeda não precisa ser repetida em cada linha.
+    """
     s = f"{valor:,.2f}"
-    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R${s}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def data_extenso(data: dt.date) -> str:
