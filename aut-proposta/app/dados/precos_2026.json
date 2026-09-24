@@ -14,10 +14,8 @@
     {"chave": "planta_isometrica", "descricao": "Planta Tipo Isométrica 3D", "preco": 1900, "padroes": ["isometrica", "isométrica", "planta.*3d"]},
     {"chave": "planta_tipo", "descricao": "Planta Humanizada Tipo", "preco": 1200, "padroes": ["tipo", "planta"]}]},
   {"nome": "tour_virtual", "ordem": 5, "rotulo": "Tour Virtual / VR 360", "prefixo": "",
-   "default": 1200, "descricao_padrao": "Tour Virtual 360 — Render por ambiente", "itens": [
-    {"chave": "tour_elaboracao", "descricao": "Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", "preco": 2500, "padroes": ["elabora"]},
-    {"chave": "tour_render", "descricao": "Tour Virtual / VR 360 Multiplataforma — Render, por ambiente", "preco": 1200, "padroes": ["render"]},
-    {"chave": "tour_web", "descricao": "Tour Virtual / VR 360 Multiplataforma — Web/Mobile/PC, por ambiente", "preco": 450, "padroes": ["web", "mobile", "publica"]}]},
+   "default": 4150, "descricao_padrao": "Vista Virtual Web – Multiplataforma – Áreas de Lazer", "itens": [
+    {"chave": "vista_virtual", "descricao": "Vista Virtual Web – Multiplataforma – Áreas de Lazer", "preco": 4150, "padroes": ["tour", "vista virtual", "vr ?360", "360", "elabora", "render", "panos", "web", "mobile"]}]},
   {"nome": "tecnologia", "ordem": 8, "rotulo": "Tecnologias Interativas", "prefixo": "",
    "default": 22800, "descricao_padrao": "Desenvolvimento de Aplicação Web para Tela Touch", "itens": [
     {"chave": "app_web_touch", "descricao": "Desenvolvimento de Aplicação Web — para Tela Touch", "preco": 22800, "padroes": ["aplicativo", "aplicacao", "aplicação", "app", "touch"]},
@@ -41,10 +39,8 @@
     {"chave": "planta_isometrica", "descricao": "Planta Tipo Isométrica 3D", "preco": 1850, "padroes": ["isometrica", "isométrica", "planta.*3d"]},
     {"chave": "planta_tipo", "descricao": "Planta Tipo", "preco": 900, "padroes": ["tipo", "planta"]}]},
   {"nome": "tour_virtual", "ordem": 5, "rotulo": "Tour Virtual / VR 360", "prefixo": "",
-   "default": 1200, "descricao_padrao": "Tour Virtual 360 — Render por ambiente", "itens": [
-    {"chave": "tour_elaboracao", "descricao": "Tour Virtual / VR 360 Multiplataforma — Elaboração, por ambiente", "preco": 2500, "padroes": ["elabora"]},
-    {"chave": "tour_render", "descricao": "Tour Virtual / VR 360 Multiplataforma — Render, por ambiente", "preco": 1200, "padroes": ["render"]},
-    {"chave": "tour_web", "descricao": "Tour Virtual / VR 360 Multiplataforma — Web/Mobile/PC, por ambiente", "preco": 450, "padroes": ["web", "mobile"]}]}
+   "default": 4150, "descricao_padrao": "Vista Virtual Web – Multiplataforma – Áreas de Lazer", "itens": [
+    {"chave": "vista_virtual", "descricao": "Vista Virtual Web – Multiplataforma – Áreas de Lazer", "preco": 4150, "padroes": ["tour", "vista virtual", "vr ?360", "360", "elabora", "render", "panos", "web", "mobile"]}]}
 ]},
  "rinno": {"categorias": [
   {"nome": "rinno_filmes", "ordem": 1, "rotulo": "Filmes", "prefixo": "",

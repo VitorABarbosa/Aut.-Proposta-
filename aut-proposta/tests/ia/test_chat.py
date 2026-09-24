@@ -587,7 +587,7 @@ def test_segunda_chamada_pobre_nao_apaga_o_que_a_primeira_precificou(db, monkeyp
     respostas = [
         _msg(tool_calls=[_tool_call("precificar_flying", {"estrutura": {
             "cliente": cliente,
-            "tour_virtual": ["Elaboração 3d", "Render 360 VR", "Versão mobile"],
+            "tour_virtual": ["Vista Virtual Web"],
             "ambientes": 7}}, id_="a")]),
         _msg(tool_calls=[_tool_call("precificar_flying",
                                     {"estrutura": {"cliente": cliente}}, id_="b")]),
@@ -600,8 +600,8 @@ def test_segunda_chamada_pobre_nao_apaga_o_que_a_primeira_precificou(db, monkeyp
     lev = out["levantamento"]
     assert lev is not None
     orc = lev["fechado"]["orcamento"]
-    assert orc["total_imagens"] == 3, "a chamada vazia apagou os itens do preview"
-    assert orc["subtotal"] == 7 * (2500 + 1200 + 450)
+    assert orc["total_imagens"] == 1, "a chamada vazia apagou os itens do preview"
+    assert orc["subtotal"] == 7 * 4150
     assert lev["estrutura"]["ambientes"] == 7
 
 

@@ -54,6 +54,14 @@ ESCOPO_POR_ITEM: dict[str, list[str]] = {
         "Vídeos Conceito + Produto + Redes Sociais",
         "Revista Digital",
     ],
+    # As três linhas são o ESCOPO do serviço, não três serviços. O catálogo já
+    # teve uma entrada por linha, e a IA vendia as três separadas: 25 áreas
+    # viraram R$ 103.750 em três itens, quando o combinado era um item a 45 mil.
+    "vista virtual": [
+        "Elaboração 3d (Arquitetura / Decoração)",
+        "Render 360° VR",
+        "Versão Mobile Offline – Panos 360º",
+    ],
     "tour virtual": [
         "Elaboração 3d (Arquitetura / Decoração)",
         "Render 360° VR",

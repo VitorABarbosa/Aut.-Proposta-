@@ -367,3 +367,19 @@ def test_item_sem_preco_sai_como_a_definir_e_nao_como_zero(tmp_path):
     assert "Maquete Eletrônica — R$25.000,00" in texto
     assert "Projeto Executivo Arquitetônico — a definir" in texto
     assert "R$0,00" not in texto
+
+
+def test_tour_sai_como_um_item_com_o_escopo_embaixo(tmp_path):
+    """Como na proposta enviada: um item, a contagem de áreas no título e as
+    três etapas como escopo — não três itens precificados."""
+    fechado = _fechado([("tour_virtual", "Tour Virtual / VR 360", [
+        ("Vista Virtual Web – Multiplataforma – Áreas de Lazer", 45000)])])
+    fechado["orcamento"]["ambientes"] = 25
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
+
+    assert "2.1 Tour Virtual / VR 360 (25 ambientes)" in texto
+    assert "1. Vista Virtual Web – Multiplataforma – Áreas de Lazer — R$45.000,00" in texto
+    for etapa in ("Elaboração 3d (Arquitetura / Decoração)", "Render 360° VR",
+                  "Versão Mobile Offline – Panos 360º"):
+        assert f"– {etapa}" in texto
+    assert "2. " not in texto.split("2.1 Tour")[1].split("Valor total")[0]
