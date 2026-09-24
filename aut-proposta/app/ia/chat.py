@@ -124,6 +124,8 @@ você):
 - `total_fechado`: valor final da proposta inteira, quando o usuário fecha o
   total ("fechamos por 100 mil", "o total fica em 85 mil"). O desconto passa a
   ser a diferença até esse número. Diferente do preço de UM item.
+- `parcelas`: "pagamento em 4x", "parcelar em 6 vezes" → o número. Troca o
+  cronograma da empresa por N parcelas iguais (ato + N-1).
 - `ambientes`: quantidade de áreas do empreendimento. Veja a regra abaixo.
 - Preço de UM item: "institucional de 2 minutos por 15 mil" → o item vai como
   {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Só
@@ -404,6 +406,13 @@ def _schema_estrutura(categorias: list[str], emissor: str | None = None) -> dict
                        "fecha o total ('fechamos por 100 mil', 'o total fica em 85 mil'). "
                        "O desconto vira a diferença entre a soma dos itens e este número. "
                        "null se não houver. Não confundir com o preço de UM item.",
+    }
+    properties["parcelas"] = {
+        "type": ["integer", "null"],
+        "description": "Em quantas vezes o cliente vai pagar, quando o usuário disser "
+                       "('pagamento em 4x', 'parcelar em 6 vezes'). Vira 'Em 4x – Ato + 3x' "
+                       "na proposta. null para o cronograma padrão da empresa, atrelado às "
+                       "etapas de entrega.",
     }
     properties["ambientes"] = {
         "type": ["integer", "null"],

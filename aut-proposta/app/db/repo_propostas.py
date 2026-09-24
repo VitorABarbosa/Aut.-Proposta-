@@ -1,6 +1,8 @@
 """Repositório de clientes e propostas (histórico)."""
 from __future__ import annotations
 
+import json
+
 import psycopg
 
 from app.dominio.texto import normalizar
@@ -40,6 +42,7 @@ def salvar_proposta(
     docx_url: str | None = None,
     tabela_precos: str = "padrao",
     emissor: str = EMISSOR_PADRAO,
+    estrutura: dict | None = None,
 ) -> int:
     orc = fechado["orcamento"]
     fin = fechado["financeiro"]
@@ -47,10 +50,11 @@ def salvar_proposta(
         cur.execute(
             "INSERT INTO propostas "
             "(cliente_id, referencia, subtotal, desconto_pct, desconto_valor, total, docx_url, "
-            "tabela_precos, emissor) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "tabela_precos, emissor, estrutura) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (cliente_id, referencia, orc["subtotal"], fin["desconto_pct"],
-             fin["desconto_valor"], fin["total"], docx_url, tabela_precos, emissor),
+             fin["desconto_valor"], fin["total"], docx_url, tabela_precos, emissor,
+             json.dumps(estrutura, ensure_ascii=False, default=str) if estrutura else None),
         )
         pid = cur.fetchone()[0]
         for cat, bloco in _categorias_do_orcamento(orc):
@@ -105,14 +109,18 @@ def obter_estrutura_de_proposta(conn: psycopg.Connection, proposta_id: int) -> d
     """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct, p.tabela_precos, p.emissor "
-            "FROM propostas p JOIN clientes c ON c.id = p.cliente_id WHERE p.id = %s",
+            "SELECT c.nome, c.contato, p.referencia, p.desconto_pct, p.tabela_precos, p.emissor, "
+            "p.estrutura FROM propostas p JOIN clientes c ON c.id = p.cliente_id WHERE p.id = %s",
             (proposta_id,),
         )
         row = cur.fetchone()
         if not row:
             return None
-        nome, contato, referencia, desconto_pct, tabela_precos, emissor = row
+        nome, contato, referencia, desconto_pct, tabela_precos, emissor, estrutura = row
+        # Proposta gerada depois da coluna `estrutura`: volta exatamente como
+        # foi feita, com ajuste, preço por imagem, ambientes e parcelamento.
+        if estrutura:
+            return estrutura
 
         listas: dict[str, list[str]] = {}
         cur.execute(

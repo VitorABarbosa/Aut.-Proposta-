@@ -262,7 +262,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     # ===== 5 – Investimento, pagamento e serviços adicionais =====
     _titulo_secao(doc, "5", "INVESTIMENTOS E FORMA DE PAGAMENTO")
     bloco_investimento(doc, "5.1", fin, titulo="INVESTIMENTO:")
-    bloco_pagamento(doc, "5.2", fin, PARCELAS_PAGAMENTO)
+    bloco_pagamento(doc, "5.2", fin, PARCELAS_PAGAMENTO, vezes=orc.get("parcelas"))
 
     _subtitulo(doc, "5.3 SERVIÇOS ADICIONAIS (ACOMPANHAMENTO E GESTÃO):")
     _bullet(doc, [

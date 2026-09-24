@@ -259,6 +259,23 @@ def rota_gerar(corpo: CorpoProposta):
     }
 
 
+@app.get("/propostas/{proposta_id}/estrutura", dependencies=[Depends(verificar_token)])
+def rota_estrutura(proposta_id: int):
+    """A proposta como ela foi feita, para editar e gerar de novo."""
+    from app.db.repo_propostas import obter_estrutura_de_proposta
+
+    conn = _abrir_conn()
+    try:
+        estrutura = obter_estrutura_de_proposta(conn, proposta_id)
+    except Exception as e:  # noqa: BLE001
+        raise _falhou("abrir a proposta", e) from None
+    finally:
+        _fechar_conn(conn)
+    if estrutura is None:
+        raise HTTPException(404, "Proposta não encontrada")
+    return {"estrutura": estrutura}
+
+
 @app.get("/propostas/{proposta_id}/docx", dependencies=[Depends(verificar_token)])
 def rota_download(proposta_id: int):
     caminho = _dir_saida() / f"proposta_{proposta_id}.docx"

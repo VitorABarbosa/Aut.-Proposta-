@@ -196,10 +196,29 @@ def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -
         _run(p, f"{brl(fin['total']).replace('R$', 'R$ ')} ({extenso(fin['total'])})")
 
 
-def bloco_pagamento(doc, numero: str, fin: dict, parcelas: tuple[tuple[int, str], ...]) -> None:
-    """Forma de pagamento. Os percentuais são da empresa; o valor de cada
-    parcela é conta feita aqui, nunca texto digitado."""
+def bloco_pagamento(doc, numero: str, fin: dict, parcelas: tuple[tuple[int, str], ...],
+                    vezes: int | None = None) -> None:
+    """Forma de pagamento.
+
+    Com `vezes` ("pagamento em 4x"), sai o parcelamento pedido: ato + N-1, em
+    valores iguais, como nas propostas ("Em 5x – Ato de R$13.800,00 + 4x de
+    13.800,00"). Sem ele, vale o cronograma da empresa, atrelado às etapas.
+
+    Em qualquer um dos dois o valor da parcela é conta feita aqui, nunca texto
+    digitado; a última absorve o centavo que a divisão deixa.
+    """
     _subtitulo(doc, f"{numero} FORMA DE PAGAMENTO:")
+    if vezes and vezes > 1:
+        base = round(fin["total"] / vezes, 2)
+        ultima = round(fin["total"] - base * (vezes - 1), 2)
+        p = _par(doc, depois=2, recuo=1.25)
+        _run(p, f"Em {vezes}x – Ato de {brl(base)} + {vezes - 1}x de "
+                f"{brl(ultima) if ultima != base else brl(base)}")
+        return
+    if vezes == 1:
+        p = _par(doc, depois=2, recuo=1.25)
+        _run(p, f"À vista, na aprovação desta Proposta ({brl(fin['total'])})")
+        return
     for pct, marco in parcelas:
         v = fin["total"] * (pct / 100.0)
         p = _par(doc, depois=2, recuo=1.25)

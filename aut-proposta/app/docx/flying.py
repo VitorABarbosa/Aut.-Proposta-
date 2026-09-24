@@ -270,7 +270,8 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
         # Serviço cobrado por ambiente traz a quantidade no título, como nas
         # propostas enviadas: "Vista Virtual Web – Áreas de Lazer (7 ambientes)".
         titulo = rotulo
-        if e_categoria_por_ambiente(cat) and ambientes > 1:
+        if (e_categoria_por_ambiente(cat) and ambientes > 1
+                and orc.get("mostrar_ambientes", True)):
             titulo = f"{rotulo} ({ambientes} ambientes)"
         _subtitulo(doc, f"2.{sub} {titulo}")
         for idx, item in enumerate(bloco["itens"], start=1):
@@ -285,7 +286,7 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     sub += 1
     bloco_investimento(doc, f"2.{sub}", fin)
     sub += 1
-    bloco_pagamento(doc, f"2.{sub}", fin, PARCELAS_PAGAMENTO)
+    bloco_pagamento(doc, f"2.{sub}", fin, PARCELAS_PAGAMENTO, vezes=orc.get("parcelas"))
 
     # ===== 3 – Prazos / Solicitações / Considerações / Entregas =====
     _titulo_secao(doc, "3", "PRAZOS / SOLICITAÇÕES / CONSIDERAÇÕES / ENTREGAS")

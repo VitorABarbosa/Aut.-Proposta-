@@ -383,3 +383,35 @@ def test_tour_sai_como_um_item_com_o_escopo_embaixo(tmp_path):
                   "Versão Mobile Offline – Panos 360º"):
         assert f"– {etapa}" in texto
     assert "2. " not in texto.split("2.1 Tour")[1].split("Valor total")[0]
+
+
+def test_pagamento_em_4x_troca_o_cronograma_da_empresa(tmp_path):
+    """"cobraremos 45k, pagamento em 4x"."""
+    fechado = _fechado([("externas", "Ilustrações Externas", [("Perspectiva Fachada", 45000)])])
+    fechado["orcamento"]["parcelas"] = 4
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
+    assert "Em 4x – Ato de R$11.250,00 + 3x de R$11.250,00" in texto
+    assert "50% – Na aprovação desta Proposta" not in texto
+
+
+def test_sem_parcelamento_vale_o_cronograma_da_empresa(tmp_path):
+    fechado = _fechado([("externas", "Ilustrações Externas", [("Perspectiva Fachada", 45000)])])
+    texto = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "f.docx", DATA, emissor="flying"))
+    assert "50% – Na aprovação desta Proposta" in texto
+    assert "Em 4x" not in texto
+
+
+def test_contagem_de_ambientes_no_titulo_e_opcional(tmp_path):
+    """"nem sempre é de 7 ambientes, pode ser mais ou menos, isso é opcional
+    colocarmos na proposta" — o número continua valendo para o preço."""
+    fechado = _fechado([("tour_virtual", "Tour Virtual / VR 360", [
+        ("Vista Virtual Web – Multiplataforma – Áreas de Lazer", 45000)])])
+    fechado["orcamento"]["ambientes"] = 25
+
+    com = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "a.docx", DATA, emissor="flying"))
+    assert "(25 ambientes)" in com
+
+    fechado["orcamento"]["mostrar_ambientes"] = False
+    sem = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "b.docx", DATA, emissor="flying"))
+    assert "ambientes)" not in sem
+    assert "R$45.000,00" in sem
