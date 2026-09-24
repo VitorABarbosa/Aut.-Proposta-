@@ -124,14 +124,19 @@ você):
 - `total_fechado`: valor final da proposta inteira, quando o usuário fecha o
   total ("fechamos por 100 mil", "o total fica em 85 mil"). O desconto passa a
   ser a diferença até esse número. Diferente do preço de UM item.
+- `parcelas`: "pagamento em 4x", "parcelar em 6 vezes" → o número. Troca o
+  cronograma da empresa por N parcelas iguais (ato + N-1).
 - `ambientes`: quantidade de áreas do empreendimento. Veja a regra abaixo.
 - Preço de UM item: "institucional de 2 minutos por 15 mil" → o item vai como
   {{"descricao": "Filme institucional de até 2:00", "preco": 15000}}. Só
   quando o usuário disse o número; sem número, mande só a descrição.
 
-TOUR VIRTUAL É COBRADO POR AMBIENTE — PERGUNTE SEMPRE QUANTAS ÁREAS. O valor é
-proporcional: as três etapas (elaboração 3d, render 360° VR, versão mobile) são
-cobradas para CADA área de lazer, então 7 áreas custam 7x. Antes de precificar
+TOUR VIRTUAL É **UM** ITEM, COBRADO POR AMBIENTE — PERGUNTE SEMPRE QUANTAS
+ÁREAS. Mande UMA entrada em `tour_virtual` ("Vista Virtual Web –
+Multiplataforma – Áreas de Lazer"), nunca três. Elaboração 3d, render 360° VR e
+versão mobile são o ESCOPO desse item, e saem sozinhas no documento — pedir as
+três como itens separados triplica a lista e estraga a conta. O valor é
+proporcional ao número de áreas. Antes de precificar
 um tour/vista virtual, pergunte "quantas áreas de lazer o empreendimento tem?"
 e ponha o número em `ambientes`. Esta é a ÚNICA quantidade que você pergunta —
 é exceção à regra de uma unidade por item, porque aqui o número muda o preço e
@@ -267,11 +272,13 @@ EXEMPLOS (pedidos reais → chamada certa; copie o padrão):
    as 30 imagens MAIS tour_virtual: ["Elaboração 3d", "Render 360 VR",
    "Versão mobile offline"] e ambientes: 7. Nunca reenvie sem as imagens:
    a chamada nova substitui o preview.
-9. "vista virtual das áreas de lazer pra Maskin, projeto Aricanduva, A/C Marcelo"
-   → primeiro pergunte "quantas áreas de lazer o empreendimento tem?"; com a
-   resposta ("7"), chame precificar_flying {{..., tour_virtual: ["Elaboração 3d",
-   "Render 360 VR", "Versão mobile offline"], ambientes: 7}} — as três etapas e
-   o número de áreas, que multiplica o preço de cada uma.
+9. "tour virtual das áreas de lazer pra Factus, A/C Eraldo, cobraremos 45k"
+   → pergunte "quantas áreas de lazer o empreendimento tem?"; com a resposta
+   ("25"), chame precificar_flying {{cliente: {{empresa: "Factus", ref: "",
+   contato: "Eraldo"}}, tour_virtual: [{{descricao: "Vista Virtual Web –
+   Multiplataforma – Áreas de Lazer", preco: 45000}}], ambientes: 25}} — UM
+   item, com o valor combinado, e o número de áreas à parte. Três itens
+   (elaboração, render, mobile) seria errado: isso é o escopo, não a lista.
 7. "A Masha Coordenação de Projetos, em nome da SAE Engenharia, solicita
    proposta do Plano de Imagens do empreendimento SAE | GUANÁS. Escopo: 1
    fachada frente + lateral direita dia, 1 fachada fundo + lateral esquerda, 1
@@ -399,6 +406,13 @@ def _schema_estrutura(categorias: list[str], emissor: str | None = None) -> dict
                        "fecha o total ('fechamos por 100 mil', 'o total fica em 85 mil'). "
                        "O desconto vira a diferença entre a soma dos itens e este número. "
                        "null se não houver. Não confundir com o preço de UM item.",
+    }
+    properties["parcelas"] = {
+        "type": ["integer", "null"],
+        "description": "Em quantas vezes o cliente vai pagar, quando o usuário disser "
+                       "('pagamento em 4x', 'parcelar em 6 vezes'). Vira 'Em 4x – Ato + 3x' "
+                       "na proposta. null para o cronograma padrão da empresa, atrelado às "
+                       "etapas de entrega.",
     }
     properties["ambientes"] = {
         "type": ["integer", "null"],

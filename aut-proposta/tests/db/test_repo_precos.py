@@ -25,7 +25,7 @@ def test_carrega_categorias_novas_com_meta_e_ordem(db):
     tour = tabela.dados["tour_virtual"]
     assert tour["_rotulo"] == "Tour Virtual / VR 360"
     assert tour["_prefixo"] == ""
-    assert tour["_default"] == 1200
+    assert tour["_default"] == 4150   # 2500 elaboração + 1200 render + 450 web
 
     tecnologia = tabela.dados["tecnologia"]
     assert tecnologia["_rotulo"] == "Tecnologias Interativas"

@@ -67,7 +67,7 @@ def test_orcamento_com_tour_e_tecnologia_soma_e_ordena():
     }
     orc = orcar_pela_planilha(desc, real)
     assert orc.categorias["tecnologia"].total == 22800
-    assert orc.subtotal == 1200 + 22800
+    assert orc.subtotal == 4150 + 22800
 
     nomes = [c["nome"] for c in orc.to_dict()["_categorias"]]
     assert nomes.index("tour_virtual") < nomes.index("tecnologia")

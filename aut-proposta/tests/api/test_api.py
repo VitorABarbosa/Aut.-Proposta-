@@ -415,3 +415,39 @@ def test_total_fechado_acima_da_soma_vale_com_aviso(cliente_api):
     assert fin["total"] == 90000
     assert fin["desconto_valor"] == 0      # nada a mostrar: o valor sai limpo
     assert any("acima da soma dos itens" in a for a in corpo["avisos"])
+
+
+def test_proposta_gerada_volta_inteira_para_editar(cliente_api):
+    """"poderia ter a opção de editar as propostas que já fizemos" — e voltar
+    inteira: ajuste, preço por imagem, ambientes e parcelamento não são itens,
+    e reconstruir a partir dos itens perdia tudo isso."""
+    estrutura = {"cliente": {"empresa": "FACTUS", "ref": "Baronesa", "contato": "Eraldo"},
+                 "emissor": "flying", "tabela_precos": "padrao",
+                 "tour_virtual": [{"descricao": "Vista Virtual Web", "preco": 45000}],
+                 "ambientes": 25, "parcelas": 4, "ajuste_planilha_pct": 10}
+    pid = cliente_api.post("/propostas", json={"estrutura": estrutura},
+                           headers=HEAD).json()["proposta_id"]
+
+    volta = cliente_api.get(f"/propostas/{pid}/estrutura", headers=HEAD)
+    assert volta.status_code == 200
+    e = volta.json()["estrutura"]
+    assert e["cliente"] == estrutura["cliente"]
+    assert e["ambientes"] == 25 and e["parcelas"] == 4
+    assert e["ajuste_planilha_pct"] == 10
+    assert e["tour_virtual"][0]["preco"] == 45000
+    assert e["emissor"] == "flying" and e["tabela_precos"] == "padrao"
+
+    # E reprecificar a estrutura que voltou dá o mesmo número.
+    de_novo = cliente_api.post("/levantamento", json={"estrutura": e}, headers=HEAD).json()
+    assert de_novo["fechado"]["financeiro"]["total"] == 45000.0
+
+
+def test_estrutura_de_proposta_inexistente_404(cliente_api):
+    assert cliente_api.get("/propostas/99999/estrutura", headers=HEAD).status_code == 404
+
+
+def test_parcelamento_invalido_e_erro_de_entrada(cliente_api):
+    estrutura = {"cliente": {"empresa": "X", "ref": "Y", "contato": "Z"},
+                 "externas": ["Fachada"], "parcelas": 99}
+    r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
+    assert r.status_code == 422 and "parcelas" in r.json()["detail"]

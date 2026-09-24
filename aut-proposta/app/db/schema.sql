@@ -69,6 +69,11 @@ ALTER TABLE preco_categoria ADD COLUMN IF NOT EXISTS tabela text NOT NULL DEFAUL
 ALTER TABLE preco_categoria ADD COLUMN IF NOT EXISTS ordem integer NOT NULL DEFAULT 0;
 ALTER TABLE preco_categoria ADD COLUMN IF NOT EXISTS rotulo_docx text NOT NULL DEFAULT '';
 ALTER TABLE preco_categoria ADD COLUMN IF NOT EXISTS prefixo text NOT NULL DEFAULT '';
+-- A estrutura inteira da proposta, para reabrir e editar depois. Reconstruir
+-- a partir dos itens perde o que não é item: ajuste de planilha, preço por
+-- imagem, quantidade de ambientes, parcelamento.
+ALTER TABLE propostas ADD COLUMN IF NOT EXISTS estrutura jsonb;
+
 ALTER TABLE preco_categoria ALTER COLUMN preco_default DROP NOT NULL;
 ALTER TABLE preco_categoria ALTER COLUMN descricao_padrao DROP NOT NULL;
 

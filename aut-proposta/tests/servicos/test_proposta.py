@@ -678,3 +678,31 @@ def test_cena_desconhecida_continua_com_o_preco_da_categoria(catalogo):
         "externas": ["Vista do mirante ao entardecer"]})
     item = lev["fechado"]["orcamento"]["externas"]["itens"][0]
     assert item["preco"] == 1900 and item["fonte"] == "planilha:default"
+
+
+def test_tour_virtual_e_um_item_so(catalogo):
+    """Factus/Eraldo: "tour virtual das areas de lazer, cobraremos 45k". A IA
+    montou três itens (elaboração, render, web) e 25 ambientes viraram
+    R$ 103.750, fechados com um desconto de R$ 58.750. Elaboração, render e
+    versão mobile são o ESCOPO de um serviço só."""
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "Factus", "ref": "—", "contato": "Eraldo"},
+        "emissor": "flying", "tabela_precos": "padrao",
+        "tour_virtual": [{"descricao": "Vista Virtual Web – Multiplataforma – Áreas de Lazer",
+                          "preco": 45000}],
+        "ambientes": 25})
+    orc, fin = lev["fechado"]["orcamento"], lev["fechado"]["financeiro"]
+
+    assert orc["tour_virtual"]["qtd"] == 1
+    assert (fin["subtotal"], fin["desconto_valor"], fin["total"]) == (45000, 0.0, 45000.0)
+
+
+def test_tour_pela_tabela_soma_um_item_por_ambiente(catalogo):
+    """Sem valor combinado, vale a tabela: um item a R$ 4.150 por ambiente
+    (2.500 de elaboração + 1.200 de render + 450 de web/mobile)."""
+    lev = svc.levantar(catalogo, {
+        "cliente": {"empresa": "X", "ref": "Y", "contato": "Z"},
+        "emissor": "flying", "tabela_precos": "padrao",
+        "tour_virtual": ["Tour virtual das áreas de lazer"], "ambientes": 7})
+    bloco = lev["fechado"]["orcamento"]["tour_virtual"]
+    assert bloco["qtd"] == 1 and bloco["total"] == 7 * 4150

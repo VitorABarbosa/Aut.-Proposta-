@@ -313,6 +313,10 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
                                   preco_por_imagem=preco_por_imagem,
                                   ambientes=ambientes or 1)
     orc.ambientes = max(1, ambientes or 1)
+    orc.parcelas = _inteiro_ou_none(estrutura.get("parcelas"))
+    if orc.parcelas is not None and not 1 <= orc.parcelas <= 24:
+        raise ValueError(f"parcelas inválido: {orc.parcelas} (use de 1 a 24)")
+    orc.mostrar_ambientes = estrutura.get("mostrar_ambientes", True) is not False
     _acrescentar_fora_da_tabela(orc, fora_da_tabela)
 
     # Serviço sem preço não trava a proposta: entra com zero e o aviso lembra
@@ -357,6 +361,11 @@ def levantar(conn: psycopg.Connection, estrutura: dict[str, Any]) -> dict[str, A
             rotulo=rotulo,
         )
 
+    # A estrutura devolvida (e gravada) carrega o que foi RESOLVIDO aqui: sem
+    # isso, reabrir a proposta para editar perde o emissor e a tabela.
+    estrutura["emissor"] = emissor
+    estrutura["tabela_precos"] = tabela_precos
+
     return {
         "cliente": estrutura["cliente"],
         # A estrutura já no namespace do emissor: quem devolve ao front tem de
@@ -398,6 +407,7 @@ def gerar(conn: psycopg.Connection, estrutura: dict[str, Any], dir_saida: Path) 
     proposta_id = salvar_proposta(
         conn, cliente_id, fechado, referencia=cliente.get("ref"),
         tabela_precos=lev["tabela_precos"], emissor=lev["emissor"],
+        estrutura=lev["estrutura"],
     )
 
     docx_path = Path(dir_saida) / f"proposta_{proposta_id}.docx"

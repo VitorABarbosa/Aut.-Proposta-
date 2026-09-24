@@ -87,6 +87,9 @@ _RE_AMBIENTES = re.compile(
 _RE_TOTAL_FECHADO = re.compile(
     r"(?:fecha(?:mos|do|r)?|total)\s*(?:a\s*proposta\s*)?(?:fica\s*)?"
     r"(?:por|em|de|:)?\s*(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+|\d{2,7})\s*(mil)?", re.I)
+# "pagamento em 4x", "parcelar em 6 vezes", "em 3x". Exige o "x" ou "vezes"
+# colado no número para não confundir com quantidade de item.
+_RE_PARCELAS = re.compile(r"(?:em|parcel\w*|pagamento\w*)\s*(\d{1,2})\s*(?:x|vezes)\b", re.I)
 _RE_PRECOS_IND = re.compile(r"pre[cç]os?\s*(?:individuais?|por\s*item|por\s*imagem)|coluna\s*de\s*(?:pre[cç]o|valor)", re.I)
 
 _CAPS_IGNORAR = {"EXTERNAS", "INTERNAS", "PLANTAS", "REF", "PROJETO", "CLIENTE",
@@ -219,6 +222,11 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
     if m:
         ambientes = int(m.group(1))
 
+    parcelas = None
+    m = _RE_PARCELAS.search(texto)
+    if m:
+        parcelas = int(m.group(1))
+
     total_fechado = None
     m = _RE_TOTAL_FECHADO.search(texto)
     if m:
@@ -250,6 +258,7 @@ def parse_local(texto: str, categorias: list[str] | tuple[str, ...] | None = Non
         "preco_por_imagem": preco_por_imagem,
         "ambientes": ambientes,
         "total_fechado": total_fechado,
+        "parcelas": parcelas,
         "estrategia": estrategia,
         "mostrar_precos_individuais": bool(_RE_PRECOS_IND.search(texto)),
         "_origem": "local",

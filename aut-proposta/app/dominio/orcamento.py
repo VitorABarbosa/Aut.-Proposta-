@@ -77,6 +77,12 @@ class Orcamento:
     # ambiente. Vai no dicionário porque o gerador do .docx precisa dela no
     # título ("Vista Virtual Web – Áreas de Lazer (7 ambientes)").
     ambientes: int = 1
+    # Quantas vezes a pessoa vai parcelar ("pagamento em 4x"); None = o
+    # cronograma da empresa, atrelado às etapas.
+    parcelas: int | None = None
+    # Mostrar "(N ambientes)" no título do serviço cobrado por ambiente. Nem
+    # toda proposta abre esse número, então é escolha, não regra.
+    mostrar_ambientes: bool = True
 
     @property
     def subtotal(self) -> int:
@@ -92,6 +98,8 @@ class Orcamento:
             "subtotal": self.subtotal,
             "total_imagens": self.total_imagens,
             "ambientes": self.ambientes,
+            "parcelas": self.parcelas,
+            "mostrar_ambientes": self.mostrar_ambientes,
         }
         for nome, cat in self.categorias.items():
             out[nome] = cat.to_dict()
