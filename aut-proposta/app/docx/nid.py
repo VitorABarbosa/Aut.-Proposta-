@@ -283,4 +283,4 @@ def escrever(doc, empresa: Empresa, cliente: dict[str, str], fechado: dict[str, 
     for segs in CONSIDERACOES:
         _bullet(doc, segs)
 
-    assinatura(doc, data)
+    assinatura(doc, data, cliente.get("empresa"))

@@ -156,9 +156,15 @@ def cabecalho_proposta(doc, empresa: Empresa, cliente: dict[str, str]) -> None:
     p = _par(doc, depois=2)
     _run(p, empresa.titulo_proposta, estilo="b")
     p = _par(doc, depois=2)
-    _run(p, f"{cliente['empresa'].upper()} - REF: {cliente['ref'].upper()}", estilo="b")
-    p = _par(doc, depois=10)
-    _run(p, f"A/C: {cliente['contato'].upper()}", estilo="b")
+    ref = (cliente.get("ref") or "").upper()
+    _run(p, f"{cliente['empresa'].upper()} - REF: {ref}" if ref
+            else cliente["empresa"].upper(), estilo="b")
+    # Sem A/C a linha some, em vez de derrubar a geração com KeyError: pedido
+    # que chega por mensagem solta muitas vezes não traz o nome de quem recebe.
+    contato = (cliente.get("contato") or "").strip()
+    if contato:
+        p = _par(doc, depois=10)
+        _run(p, f"A/C: {contato.upper()}", estilo="b")
 
 
 def bloco_investimento(doc, numero: str, fin: dict, titulo: str | None = None) -> None:
@@ -225,7 +231,13 @@ def bloco_pagamento(doc, numero: str, fin: dict, parcelas: tuple[tuple[int, str]
         _run(p, f"{pct}% – {marco} ({brl(v)})")
 
 
-def assinatura(doc, data: dt.date) -> None:
+def assinatura(doc, data: dt.date, cliente: str | None = None) -> None:
+    """Fecho da proposta: data, "De acordo," e a linha de assinatura.
+
+    Embaixo da linha vai o nome de QUEM ASSINA — o cliente, sempre. A linha
+    fica vazia (é ali que a pessoa assina no PDF), e o nome centralizado
+    logo abaixo diz de quem é a assinatura que está sendo esperada.
+    """
     p = _par(doc, antes=16, depois=12)
     _run(p, f"São Paulo, {data_extenso(data)}.")
     p = _par(doc, depois=24)
@@ -234,6 +246,11 @@ def assinatura(doc, data: dt.date) -> None:
     p = _par(doc, depois=0)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p, "_" * 60)
+    nome = (cliente or "").strip()
+    if nome:
+        p = _par(doc, depois=0)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p, nome.upper(), estilo="b")
 
 
 def valor_do_item(preco: int) -> str:

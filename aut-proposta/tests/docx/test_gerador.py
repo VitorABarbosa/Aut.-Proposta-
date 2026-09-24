@@ -203,14 +203,18 @@ def test_destaques_inline_do_modelo(tmp_path):
     runs = runs_de("Valor total:")
     assert all(x.bold for x in runs if x.text.strip())
 
-    # Assinatura: linha centralizada VAZIA (o cliente assina sobre ela no PDF);
-    # o nome do cliente NÃO aparece depois da linha.
+    # Assinatura: linha centralizada VAZIA (o cliente assina sobre ela no PDF)
+    # e, embaixo dela, o nome de quem assina — o cliente, sempre.
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    linha = doc.paragraphs[-1]
-    assert set(linha.text) == {"_"}  # linha de assinatura, último parágrafo
+    nome = doc.paragraphs[-1]
+    assert nome.text == "GALLI"
+    assert nome.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert nome.runs[0].bold
+    linha = doc.paragraphs[-2]
+    assert set(linha.text) == {"_"}  # linha de assinatura, vazia
     assert linha.alignment == WD_ALIGN_PARAGRAPH.CENTER
-    assert doc.paragraphs[-2].text == "De acordo,"
+    assert doc.paragraphs[-3].text == "De acordo,"
 
 
 def test_cada_item_sai_com_o_seu_valor(tmp_path):

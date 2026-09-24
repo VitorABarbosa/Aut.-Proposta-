@@ -415,3 +415,23 @@ def test_contagem_de_ambientes_no_titulo_e_opcional(tmp_path):
     sem = _texto(gerar_docx(CLIENTE, fechado, tmp_path / "b.docx", DATA, emissor="flying"))
     assert "ambientes)" not in sem
     assert "R$45.000,00" in sem
+
+
+@pytest.mark.parametrize("emissor,fechado", [
+    ("flying", FECHADO_FLYING),
+    ("rinno", FECHADO_RINNO),
+    ("nid", FECHADO_NID),
+])
+def test_quem_assina_e_o_cliente_nas_tres_empresas(tmp_path, emissor, fechado):
+    """"cliente sempre com o nome em baixo": a linha de assinatura vazia e,
+    centralizado sob ela, o nome de quem vai assinar."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    saida = tmp_path / f"{emissor}.docx"
+    gerar_docx(CLIENTE, fechado, saida, emissor=emissor, data=DATA)
+    doc = Document(str(saida))
+
+    nome = doc.paragraphs[-1]
+    assert nome.text == "OUSY"
+    assert nome.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert set(doc.paragraphs[-2].text) == {"_"}

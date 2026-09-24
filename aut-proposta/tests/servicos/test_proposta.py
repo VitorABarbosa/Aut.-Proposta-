@@ -190,10 +190,13 @@ def test_gerar_usa_chave_organizada_por_cliente_projeto(db, tmp_path, monkeypatc
                                                 f"https://r2/{chave}")[1])
     out = svc.gerar(db, _estrutura(), tmp_path)
     # O emissor abre o caminho: o mesmo cliente/projeto pode ter proposta das
-    # três empresas, e no R2 elas não se misturam.
-    esperado = f"Propostas/flying/galli/residencial-aurora/proposta_{out['proposta_id']}.docx"
+    # três empresas, e no R2 elas não se misturam. O arquivo leva o nome
+    # comercial, com o id na frente para duas revisões não se sobrescreverem.
+    esperado = (f"Propostas/flying/galli/residencial-aurora/{out['proposta_id']}_"
+                f"Flying_GALLI_ResidencialAurora_Imagens_AnexoI_R00.docx")
     assert chaves == [esperado]
     assert out["chave_r2"] == esperado
+    assert out["nome_arquivo"] == "Flying_GALLI_ResidencialAurora_Imagens_AnexoI_R00"
 
 
 def test_categoria_fora_da_tabela_gera_aviso(db):

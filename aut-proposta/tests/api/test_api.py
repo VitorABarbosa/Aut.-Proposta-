@@ -451,3 +451,48 @@ def test_parcelamento_invalido_e_erro_de_entrada(cliente_api):
                  "externas": ["Fachada"], "parcelas": 99}
     r = cliente_api.post("/levantamento", json={"estrutura": estrutura}, headers=HEAD)
     assert r.status_code == 422 and "parcelas" in r.json()["detail"]
+
+
+def test_download_sai_com_o_nome_comercial(cliente_api):
+    """"o arquivo tem sempre que vir salvo como
+    Flying_Factus_Upside_Vista_AnexoI_R00" — `proposta_57.docx` é o nome de
+    dentro de casa, não o que chega na incorporadora."""
+    estrutura = {"cliente": {"empresa": "Factus", "ref": "Upside", "contato": "Eraldo"},
+                 "emissor": "flying",
+                 "tour_virtual": [{"descricao": "Vista Virtual Web", "preco": 45000}],
+                 "ambientes": 25}
+    corpo = cliente_api.post("/propostas", json={"estrutura": estrutura},
+                             headers=HEAD).json()
+    assert corpo["nome_arquivo"] == "Flying_Factus_Upside_Vista_AnexoI_R00"
+
+    r = cliente_api.get(corpo["download"], headers=HEAD)
+    assert "Flying_Factus_Upside_Vista_AnexoI_R00.docx" in r.headers["content-disposition"]
+
+    lista = cliente_api.get("/propostas", headers=HEAD).json()["propostas"]
+    assert lista[0]["nome_arquivo"] == "Flying_Factus_Upside_Vista_AnexoI_R00"
+
+
+def test_nome_do_arquivo_escrito_a_mao_manda(cliente_api):
+    """"tudo pode e deve ter opção de ser alterado manualmente" — o nome
+    calculado é palpite; o digitado é decisão."""
+    estrutura = {"cliente": {"empresa": "Factus", "ref": "Upside"},
+                 "emissor": "flying", "externas": ["Fachada"],
+                 "nome_arquivo": "Flying_Factus_Upside_Especial_R00"}
+    corpo = cliente_api.post("/propostas", json={"estrutura": estrutura},
+                             headers=HEAD).json()
+    assert corpo["nome_arquivo"] == "Flying_Factus_Upside_Especial_R00"
+
+
+def test_reabrir_para_editar_sobe_a_revisao(cliente_api):
+    """A R00 já foi enviada: mexer nela é a R01, não outra R00."""
+    estrutura = {"cliente": {"empresa": "Factus", "ref": "Upside"},
+                 "emissor": "flying", "externas": ["Fachada"]}
+    pid = cliente_api.post("/propostas", json={"estrutura": estrutura},
+                           headers=HEAD).json()["proposta_id"]
+
+    e = cliente_api.get(f"/propostas/{pid}/estrutura", headers=HEAD).json()["estrutura"]
+    assert e["revisao"] == 1
+    assert e["nome_arquivo"].endswith("_R01")
+
+    corpo = cliente_api.post("/propostas", json={"estrutura": e}, headers=HEAD).json()
+    assert corpo["nome_arquivo"] == "Flying_Factus_Upside_Imagens_AnexoI_R01"
